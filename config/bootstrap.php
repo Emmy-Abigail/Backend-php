@@ -20,6 +20,9 @@ $dotenv->required([
     'DB_USERNAME',
     'DB_CHARSET',
     'DB_COLLATION',
+    'JWT_SECRET',
+    'JWT_ISSUER',
+    'JWT_TTL_SECONDS',
 ])->notEmpty();
 
 /** @var callable(): Capsule $connectDatabase */

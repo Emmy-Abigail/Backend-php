@@ -15,6 +15,9 @@ services:
       DB_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD must be set}"
       DB_CHARSET: "${DB_CHARSET:?DB_CHARSET must be set}"
       DB_COLLATION: "${DB_COLLATION:?DB_COLLATION must be set}"
+      JWT_SECRET: "${JWT_SECRET:?JWT_SECRET must be set}"
+      JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER must be set}"
+      JWT_TTL_SECONDS: "${JWT_TTL_SECONDS:?JWT_TTL_SECONDS must be set}"
     volumes:
       - ./.env:/var/www/.env:ro
     depends_on:
