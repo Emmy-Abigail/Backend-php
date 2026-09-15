@@ -24,3 +24,45 @@ Para detener los servicios conservando los datos:
 docker compose down
 ```
 
+## Autenticación (JWT)
+
+### Variables de entorno
+El sistema requiere las siguientes variables de entorno configuradas en el archivo `.env`:
+- `JWT_SECRET`: Clave secreta para la firma criptográfica HMAC-SHA256 (mínimo 32 caracteres).
+- `JWT_ISSUER`: Identificador del emisor del token (ej. `gestion-envios-api`).
+- `JWT_TTL_SECONDS`: Tiempo de vida del token en segundos (por defecto `28800`, equivalente a 8 horas).
+
+### Flujo de autenticación
+1. **Inicio de sesión:** El cliente realiza una solicitud `POST /api/v1/auth/login` con sus credenciales (`correo` y `password`).
+2. **Emisión del token:** La API verifica las credenciales y devuelve un token JWT con vigencia de 8 horas (`expires_at` en formato ISO 8601) junto con los datos del usuario autenticado.
+3. **Uso del token:** En solicitudes subsecuentes a endpoints protegidos, el cliente debe incluir la cabecera HTTP `Authorization: Bearer <token>`.
+
+### Ejemplo con curl
+
+Inicio de sesión para obtener el token:
+```bash
+curl -X POST http://localhost:8081/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"correo":"admin@email.com","password":"CAMBIA_ESTA_CLAVE_POR_UNA_SEGURA"}'
+```
+
+Consulta del perfil del usuario autenticado con el token recibido:
+```bash
+curl -X GET http://localhost:8081/api/v1/auth/me \
+  -H "Authorization: Bearer <TOKEN_OBTENIDO>"
+```
+
+### Protección de rutas con Middlewares
+
+Para proteger una ruta y requerir autenticación JWT junto con validación de roles, se encadenan `JwtAuthMiddleware` y `RoleMiddleware`:
+
+```php
+$roleMiddleware = new RoleMiddleware('Admin');
+
+// En Slim, el último middleware añadido con ->add() se ejecuta primero.
+// Por tanto, se añade RoleMiddleware primero y JwtAuthMiddleware después:
+$app->get('/api/v1/ruta-protegida', $action)
+    ->add($roleMiddleware)
+    ->add($jwtAuthMiddleware);
+```
+
