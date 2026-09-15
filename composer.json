@@ -1,0 +1,21 @@
+{
+    "require": {
+        "slim/slim": "4.*",
+        "slim/psr7": "^1.8",
+        "illuminate/database": "^13.31",
+        "vlucas/phpdotenv": "^5.7"
+    },
+    "require-dev": {
+        "robmorgan/phinx": "^0.16.12"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "scripts": {
+        "migrate": "phinx migrate -c phinx.php",
+        "migrate:status": "phinx status -c phinx.php",
+        "migrate:rollback": "phinx rollback -c phinx.php"
+    }
+}
