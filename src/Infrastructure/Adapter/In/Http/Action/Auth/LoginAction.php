@@ -48,6 +48,9 @@ final readonly class LoginAction
         }
 
         return $this->json($response, [
+            'token' => $result->token,
+            'token_type' => $result->tokenType,
+            'expires_at' => $result->expiresAt->format(DATE_ATOM),
             'user' => [
                 'id' => $result->id,
                 'nombres' => $result->names,
