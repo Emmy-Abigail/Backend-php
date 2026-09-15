@@ -1,0 +1,45 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${API_PORT:?API_PORT must be set}:8080"
+    environment:
+      APP_ENV: "${APP_ENV:?APP_ENV must be set}"
+      DB_CONNECTION: "${DB_CONNECTION:?DB_CONNECTION must be set}"
+      DB_HOST: "${DB_HOST:?DB_HOST must be set}"
+      DB_PORT: "${DB_PORT:?DB_PORT must be set}"
+      DB_DATABASE: "${DB_DATABASE:?DB_DATABASE must be set}"
+      DB_USERNAME: "${DB_USERNAME:?DB_USERNAME must be set}"
+      DB_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD must be set}"
+      DB_CHARSET: "${DB_CHARSET:?DB_CHARSET must be set}"
+      DB_COLLATION: "${DB_COLLATION:?DB_COLLATION must be set}"
+    volumes:
+      - ./.env:/var/www/.env:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.4
+    ports:
+      - "${MYSQL_HOST_PORT:?MYSQL_HOST_PORT must be set}:3306"
+    environment:
+      MYSQL_DATABASE: "${DB_DATABASE:?DB_DATABASE must be set}"
+      MYSQL_USER: "${DB_USERNAME:?DB_USERNAME must be set}"
+      MYSQL_PASSWORD: "${DB_PASSWORD:?DB_PASSWORD must be set}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD must be set}"
+    volumes:
+      - riva_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  riva_mysql_data:
