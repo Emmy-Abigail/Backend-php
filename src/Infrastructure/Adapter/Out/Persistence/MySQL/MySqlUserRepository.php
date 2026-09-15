@@ -19,6 +19,22 @@ final class MySqlUserRepository implements UserRepository
             return null;
         }
 
+        return $this->toDomain($record);
+    }
+
+    public function findById(int $id): ?User
+    {
+        $record = UserRecord::query()->find($id);
+
+        if ($record === null) {
+            return null;
+        }
+
+        return $this->toDomain($record);
+    }
+
+    private function toDomain(UserRecord $record): User
+    {
         return new User(
             (int) $record->getAttribute('id'),
             (string) $record->getAttribute('nombres'),

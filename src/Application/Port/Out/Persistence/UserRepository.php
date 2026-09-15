@@ -9,4 +9,6 @@ use App\Domain\User\User;
 interface UserRepository
 {
     public function findByEmail(string $email): ?User;
+
+    public function findById(int $id): ?User;
 }
