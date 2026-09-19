@@ -54,7 +54,7 @@ final readonly class ChangePasswordAction
             return $this->json($response, ['message' => 'La nueva contraseña debe ser diferente a la actual'], 422);
         } catch (WeakPasswordException) {
             return $this->json($response, [
-                'message' => 'La nueva contraseña no cumple con la política de seguridad (mínimo 8 caracteres, mayúscula, minúscula, número y símbolo)',
+                'message' => 'La nueva contraseña no cumple con la política de seguridad (mínimo 12 caracteres, mayúscula, minúscula, número y símbolo)',
             ], 422);
         }
 

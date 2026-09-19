@@ -1,0 +1,460 @@
+openapi: 3.0.3
+info:
+  title: Sistema de Gestión de Envíos API
+  version: 1.0.0
+  description: |
+    Documentación de los endpoints disponibles actualmente.
+
+    ## Próximos endpoints
+
+    Las rutas marcadas como **Pendiente** ya están registradas, pero responden
+    `501 Endpoint aún no implementado` hasta que se complete su funcionalidad.
+servers:
+  - url: /
+    description: Servidor actual
+tags:
+  - name: Autenticación
+  - name: Usuarios
+  - name: Paquetes (próximamente)
+  - name: Lotes (próximamente)
+  - name: Conductor (próximamente)
+  - name: Entregas (próximamente)
+  - name: Seguimiento (próximamente)
+  - name: Dashboard (próximamente)
+  - name: Zonas (próximamente)
+paths:
+  /api/v1/auth/login:
+    post:
+      tags: [Autenticación]
+      summary: Iniciar sesión
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Inicio de sesión correcto
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/auth/me:
+    get:
+      tags: [Autenticación]
+      summary: Consultar el usuario autenticado
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Usuario autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/auth/change-password:
+    patch:
+      tags: [Autenticación]
+      summary: Cambiar la contraseña del usuario autenticado
+      description: La nueva contraseña requiere mínimo 12 caracteres, mayúscula, minúscula, número y símbolo.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Contraseña actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/users:
+    get:
+      tags: [Usuarios]
+      summary: Listar el personal registrado
+      description: Requiere un JWT de un usuario con rol Admin.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Personal registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    post:
+      tags: [Usuarios]
+      summary: Crear un usuario
+      description: Requiere un JWT de un usuario con rol Admin. La contraseña temporal se muestra una sola vez.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: Usuario creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateUserResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Ya existe un usuario con ese correo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /api/v1/packages:
+    get:
+      tags: [Paquetes (próximamente)]
+      summary: '[Pendiente] Listar paquetes'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+    post:
+      tags: [Paquetes (próximamente)]
+      summary: '[Pendiente] Crear paquete'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/packages/{id}:
+    get:
+      tags: [Paquetes (próximamente)]
+      summary: '[Pendiente] Consultar un paquete'
+      parameters:
+        - $ref: '#/components/parameters/PackageId'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/packages/{id}/history:
+    get:
+      tags: [Paquetes (próximamente)]
+      summary: '[Pendiente] Consultar historial de un paquete'
+      parameters:
+        - $ref: '#/components/parameters/PackageId'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/batches:
+    get:
+      tags: [Lotes (próximamente)]
+      summary: '[Pendiente] Listar lotes'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+    post:
+      tags: [Lotes (próximamente)]
+      summary: '[Pendiente] Crear lote'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/batches/{id}:
+    get:
+      tags: [Lotes (próximamente)]
+      summary: '[Pendiente] Consultar un lote'
+      parameters:
+        - $ref: '#/components/parameters/BatchId'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/batches/{id}/assignment:
+    patch:
+      tags: [Lotes (próximamente)]
+      summary: '[Pendiente] Asignar lote'
+      parameters:
+        - $ref: '#/components/parameters/BatchId'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/me/batches:
+    get:
+      tags: [Conductor (próximamente)]
+      summary: '[Pendiente] Consultar lotes del conductor'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/me/packages:
+    get:
+      tags: [Conductor (próximamente)]
+      summary: '[Pendiente] Consultar paquetes del conductor'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/batches/{id}/start-route:
+    post:
+      tags: [Conductor (próximamente)]
+      summary: '[Pendiente] Iniciar ruta de un lote'
+      parameters:
+        - $ref: '#/components/parameters/BatchId'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/packages/{id}/deliver:
+    post:
+      tags: [Entregas (próximamente)]
+      summary: '[Pendiente] Registrar entrega de un paquete'
+      parameters:
+        - $ref: '#/components/parameters/PackageId'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/packages/{id}/fail:
+    post:
+      tags: [Entregas (próximamente)]
+      summary: '[Pendiente] Registrar entrega fallida'
+      parameters:
+        - $ref: '#/components/parameters/PackageId'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/tracking/{trackingId}:
+    get:
+      tags: [Seguimiento (próximamente)]
+      summary: '[Pendiente] Consultar seguimiento'
+      parameters:
+        - $ref: '#/components/parameters/TrackingId'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/dashboard/metrics:
+    get:
+      tags: [Dashboard (próximamente)]
+      summary: '[Pendiente] Consultar métricas del dashboard'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+  /api/v1/zones:
+    get:
+      tags: [Zonas (próximamente)]
+      summary: '[Pendiente] Listar zonas'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+    post:
+      tags: [Zonas (próximamente)]
+      summary: '[Pendiente] Crear zona'
+      responses:
+        '501':
+          $ref: '#/components/responses/NotImplemented'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    PackageId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: Identificador del paquete
+    BatchId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+      description: Identificador del lote
+    TrackingId:
+      name: trackingId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Código de seguimiento
+  responses:
+    NotImplemented:
+      description: Endpoint registrado, pero su funcionalidad aún no está implementada
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MessageResponse'
+          example:
+            message: Endpoint aún no implementado
+    BadRequest:
+      description: Solicitud inválida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MessageResponse'
+    Unauthorized:
+      description: Token inválido, ausente o credenciales incorrectas
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MessageResponse'
+    Forbidden:
+      description: El usuario no tiene el rol requerido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MessageResponse'
+    ValidationError:
+      description: Datos de entrada inválidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/MessageResponse'
+  schemas:
+    LoginRequest:
+      type: object
+      required: [correo, password]
+      properties:
+        correo:
+          type: string
+          format: email
+          example: conductor@ejemplo.com
+        password:
+          type: string
+          format: password
+          example: ClaveTemporal2026!
+    LoginResponse:
+      type: object
+      required: [token, token_type, expires_at, user]
+      properties:
+        token:
+          type: string
+          description: JWT que debe enviarse como Bearer Token.
+        token_type:
+          type: string
+          example: Bearer
+        expires_at:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/User'
+    ChangePasswordRequest:
+      type: object
+      required: [password_actual, password_nuevo]
+      properties:
+        password_actual:
+          type: string
+          format: password
+        password_nuevo:
+          type: string
+          format: password
+          example: NuevaClaveSegura2026!
+    CreateUserRequest:
+      type: object
+      required: [nombres, correo, rol]
+      properties:
+        nombres:
+          type: string
+          maxLength: 150
+          example: Ana Pérez
+        correo:
+          type: string
+          format: email
+          maxLength: 150
+          example: ana.perez@ejemplo.com
+        telefono:
+          type: string
+          maxLength: 20
+          nullable: true
+          example: '+51999999999'
+        rol:
+          type: string
+          enum: [Admin, Conductor]
+          example: Conductor
+    CreateUserResponse:
+      type: object
+      required: [id, nombres, correo, rol, password_temporal]
+      properties:
+        id:
+          type: integer
+          example: 2
+        nombres:
+          type: string
+        correo:
+          type: string
+          format: email
+        rol:
+          type: string
+          enum: [Admin, Conductor]
+        password_temporal:
+          type: string
+          description: Se devuelve únicamente al crear el usuario; no se almacena sin hash.
+    User:
+      type: object
+      required: [id, nombres, correo, rol]
+      properties:
+        id:
+          type: integer
+          example: 1
+        nombres:
+          type: string
+          example: Administrador Inicial
+        correo:
+          type: string
+          format: email
+          example: admin@ejemplo.com
+        rol:
+          type: string
+          example: Admin
+    UserResponse:
+      type: object
+      required: [user]
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+    UserListItem:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - type: object
+          required: [telefono, activo]
+          properties:
+            telefono:
+              type: string
+              nullable: true
+              example: '+51999999999'
+            activo:
+              type: boolean
+              example: true
+    UserListResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserListItem'
+    MessageResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
