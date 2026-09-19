@@ -19,4 +19,3 @@ return static function (
     $app->get('/api/v1/auth/me', $meAction)->add($jwtAuthMiddleware);
     $app->patch('/api/v1/auth/change-password', $changePasswordAction)->add($jwtAuthMiddleware);
 };
-

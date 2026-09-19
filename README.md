@@ -59,7 +59,7 @@ curl -X PATCH http://localhost:8081/api/v1/auth/change-password \
   -H "Content-Type: application/json" \
   -d '{"password_actual":"CAMBIA_ESTA_CLAVE_POR_UNA_SEGURA","password_nuevo":"NuevaClaveSegura2026!"}'
 ```
-> La nueva contraseña debe cumplir con la política de seguridad: mínimo 8 caracteres (máx. 72), mayúscula, minúscula, número y carácter especial. Tras la actualización, `debe_cambiar_password` se actualiza a `false`.
+> La nueva contraseña debe cumplir con la política de seguridad: mínimo 12 caracteres (máx. 72), mayúscula, minúscula, número y carácter especial. Tras la actualización, `debe_cambiar_password` se actualiza a `false`.
 
 
 ### Protección de rutas con Middlewares
@@ -75,4 +75,3 @@ $app->get('/api/v1/ruta-protegida', $action)
     ->add($roleMiddleware)
     ->add($jwtAuthMiddleware);
 ```
-

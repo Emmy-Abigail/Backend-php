@@ -5,10 +5,15 @@ declare(strict_types=1);
 use App\Application\Service\Auth\AuthenticateTokenService;
 use App\Application\Service\Auth\ChangePasswordService;
 use App\Application\Service\Auth\LoginService;
+use App\Application\Service\User\CreateUserService;
+use App\Application\Service\User\ListUsersService;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\ChangePasswordAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\LoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\MeAction;
+use App\Infrastructure\Adapter\In\Http\Action\User\CreateUserAction;
+use App\Infrastructure\Adapter\In\Http\Action\User\ListUsersAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
+use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlUserRepository;
 use App\Infrastructure\Adapter\Out\Security\JwtTokenService;
 use Slim\Factory\AppFactory;
@@ -32,16 +37,26 @@ $loginAction = new LoginAction(
 
 $authenticateTokenService = new AuthenticateTokenService($tokenService, $userRepository);
 $jwtAuthMiddleware = new JwtAuthMiddleware($authenticateTokenService);
+$adminRoleMiddleware = new RoleMiddleware('Admin');
 $meAction = new MeAction();
 $changePasswordAction = new ChangePasswordAction(
     new ChangePasswordService($userRepository),
 );
 
+$createUserAction = new CreateUserAction(
+    new CreateUserService($userRepository),
+);
+$listUsersAction = new ListUsersAction(
+    new ListUsersService($userRepository),
+);
+
 $registerAuthRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/AuthRoutes.php';
 $registerAuthRoutes($app, $loginAction, $meAction, $changePasswordAction, $jwtAuthMiddleware);
 
+$registerUserRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php';
+$registerUserRoutes($app, $createUserAction, $listUsersAction, $jwtAuthMiddleware, $adminRoleMiddleware);
+
 $routeFiles = [
-    __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/PackageRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/BatchRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/DriverRoutes.php',

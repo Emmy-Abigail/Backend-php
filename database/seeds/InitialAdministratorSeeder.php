@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domain\User\PasswordPolicy;
 use Phinx\Seed\AbstractSeed;
 
 final class InitialAdministratorSeeder extends AbstractSeed
@@ -20,7 +21,7 @@ final class InitialAdministratorSeeder extends AbstractSeed
             throw new RuntimeException('INITIAL_ADMIN_CORREO no tiene un formato válido');
         }
 
-        if (!$this->hasStrongPassword($password)) {
+        if (!PasswordPolicy::isValid($password)) {
             throw new RuntimeException(
                 'INITIAL_ADMIN_PASSWORD debe tener entre 12 y 72 caracteres, mayúscula, minúscula, número y símbolo',
             );
@@ -59,15 +60,5 @@ final class InitialAdministratorSeeder extends AbstractSeed
         }
 
         return $value;
-    }
-
-    private function hasStrongPassword(string $password): bool
-    {
-        return strlen($password) >= 12
-            && strlen($password) <= 72
-            && preg_match('/[a-z]/', $password) === 1
-            && preg_match('/[A-Z]/', $password) === 1
-            && preg_match('/\d/', $password) === 1
-            && preg_match('/[^A-Za-z0-9]/', $password) === 1;
     }
 }

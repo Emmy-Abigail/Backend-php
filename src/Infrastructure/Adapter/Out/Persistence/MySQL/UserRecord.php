@@ -14,6 +14,16 @@ final class UserRecord extends Model
 
     public $timestamps = true;
 
+    protected $fillable = [
+        'nombres',
+        'correo',
+        'telefono',
+        'password_hash',
+        'rol',
+        'debe_cambiar_password',
+        'activo',
+    ];
+
     protected $hidden = [
         'password_hash',
     ];
