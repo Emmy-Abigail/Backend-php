@@ -12,6 +12,11 @@ interface UserRepository
 
     public function findById(int $id): ?User;
 
+    /**
+     * @return list<User>
+     */
+    public function findAll(): array;
+
     public function existsByEmail(string $email): bool;
 
     public function create(

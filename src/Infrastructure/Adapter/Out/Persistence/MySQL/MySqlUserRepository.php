@@ -35,6 +35,20 @@ final class MySqlUserRepository implements UserRepository
         return $this->toDomain($record);
     }
 
+    /**
+     * @return list<User>
+     */
+    public function findAll(): array
+    {
+        $users = [];
+
+        foreach (UserRecord::query()->orderBy('id')->get() as $record) {
+            $users[] = $this->toDomain($record);
+        }
+
+        return $users;
+    }
+
     public function existsByEmail(string $email): bool
     {
         return UserRecord::query()->where('correo', $email)->exists();
@@ -77,6 +91,7 @@ final class MySqlUserRepository implements UserRepository
             (string) $record->getAttribute('password_hash'),
             (string) $record->getAttribute('rol'),
             (bool) $record->getAttribute('activo'),
+            $record->getAttribute('telefono') === null ? null : (string) $record->getAttribute('telefono'),
         );
     }
 }
