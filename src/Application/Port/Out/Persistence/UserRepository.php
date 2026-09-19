@@ -11,4 +11,14 @@ interface UserRepository
     public function findByEmail(string $email): ?User;
 
     public function findById(int $id): ?User;
+
+    public function existsByEmail(string $email): bool;
+
+    public function create(
+        string $names,
+        string $email,
+        ?string $phone,
+        string $passwordHash,
+        string $role,
+    ): User;
 }

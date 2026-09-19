@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 use App\Application\Service\Auth\AuthenticateTokenService;
 use App\Application\Service\Auth\LoginService;
+use App\Application\Service\User\CreateUserService;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\LoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\MeAction;
+use App\Infrastructure\Adapter\In\Http\Action\User\CreateUserAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlUserRepository;
 use App\Infrastructure\Adapter\Out\Security\JwtTokenService;
@@ -32,11 +34,17 @@ $authenticateTokenService = new AuthenticateTokenService($tokenService, $userRep
 $jwtAuthMiddleware = new JwtAuthMiddleware($authenticateTokenService);
 $meAction = new MeAction();
 
+$createUserAction = new CreateUserAction(
+    new CreateUserService($userRepository),
+);
+
 $registerAuthRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/AuthRoutes.php';
 $registerAuthRoutes($app, $loginAction, $meAction, $jwtAuthMiddleware);
 
+$registerUserRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php';
+$registerUserRoutes($app, $createUserAction);
+
 $routeFiles = [
-    __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/PackageRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/BatchRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/DriverRoutes.php',

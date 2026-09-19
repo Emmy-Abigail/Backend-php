@@ -33,6 +33,31 @@ final class MySqlUserRepository implements UserRepository
         return $this->toDomain($record);
     }
 
+    public function existsByEmail(string $email): bool
+    {
+        return UserRecord::query()->where('correo', $email)->exists();
+    }
+
+    public function create(
+        string $names,
+        string $email,
+        ?string $phone,
+        string $passwordHash,
+        string $role,
+    ): User {
+        $record = UserRecord::query()->create([
+            'nombres' => $names,
+            'correo' => $email,
+            'telefono' => $phone,
+            'password_hash' => $passwordHash,
+            'rol' => $role,
+            'debe_cambiar_password' => true,
+            'activo' => true,
+        ]);
+
+        return $this->toDomain($record);
+    }
+
     private function toDomain(UserRecord $record): User
     {
         return new User(
