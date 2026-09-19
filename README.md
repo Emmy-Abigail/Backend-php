@@ -10,6 +10,8 @@ docker compose up --build
 
 La API quedará en `http://localhost:8081/health` y MySQL estará disponible para herramientas locales en `localhost:3307`.
 
+La documentación interactiva de los endpoints activos está disponible en `http://localhost:8081/docs/`.
+
 Al iniciar, la API ejecuta `phinx migrate`. Phinx registra las migraciones aplicadas en la tabla `phinxlog`, por lo que únicamente ejecuta las nuevas. Tras agregar una migración, vuelve a construir e iniciar:
 
 ```powershell
