@@ -52,6 +52,16 @@ curl -X GET http://localhost:8081/api/v1/auth/me \
   -H "Authorization: Bearer <TOKEN_OBTENIDO>"
 ```
 
+Cambio de contraseña del usuario autenticado (requiere token JWT):
+```bash
+curl -X PATCH http://localhost:8081/api/v1/auth/change-password \
+  -H "Authorization: Bearer <TOKEN_OBTENIDO>" \
+  -H "Content-Type: application/json" \
+  -d '{"password_actual":"CAMBIA_ESTA_CLAVE_POR_UNA_SEGURA","password_nuevo":"NuevaClaveSegura2026!"}'
+```
+> La nueva contraseña debe cumplir con la política de seguridad: mínimo 8 caracteres (máx. 72), mayúscula, minúscula, número y carácter especial. Tras la actualización, `debe_cambiar_password` se actualiza a `false`.
+
+
 ### Protección de rutas con Middlewares
 
 Para proteger una ruta y requerir autenticación JWT junto con validación de roles, se encadenan `JwtAuthMiddleware` y `RoleMiddleware`:

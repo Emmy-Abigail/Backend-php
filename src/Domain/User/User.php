@@ -13,6 +13,7 @@ final readonly class User
         private string $passwordHash,
         public string $role,
         public bool $active,
+        public bool $mustChangePassword = false,
     ) {
     }
 

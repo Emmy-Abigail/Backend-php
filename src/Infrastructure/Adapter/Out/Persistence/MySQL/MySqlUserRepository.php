@@ -33,6 +33,16 @@ final class MySqlUserRepository implements UserRepository
         return $this->toDomain($record);
     }
 
+    public function updatePassword(int $userId, string $newPasswordHash, bool $mustChangePassword = false): void
+    {
+        UserRecord::query()
+            ->where('id', $userId)
+            ->update([
+                'password_hash' => $newPasswordHash,
+                'debe_cambiar_password' => $mustChangePassword,
+            ]);
+    }
+
     private function toDomain(UserRecord $record): User
     {
         return new User(
@@ -42,6 +52,7 @@ final class MySqlUserRepository implements UserRepository
             (string) $record->getAttribute('password_hash'),
             (string) $record->getAttribute('rol'),
             (bool) $record->getAttribute('activo'),
+            (bool) $record->getAttribute('debe_cambiar_password'),
         );
     }
 }

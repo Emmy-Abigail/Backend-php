@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 use App\Application\Service\Auth\AuthenticateTokenService;
+use App\Application\Service\Auth\ChangePasswordService;
 use App\Application\Service\Auth\LoginService;
+use App\Infrastructure\Adapter\In\Http\Action\Auth\ChangePasswordAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\LoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\MeAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
@@ -31,9 +33,12 @@ $loginAction = new LoginAction(
 $authenticateTokenService = new AuthenticateTokenService($tokenService, $userRepository);
 $jwtAuthMiddleware = new JwtAuthMiddleware($authenticateTokenService);
 $meAction = new MeAction();
+$changePasswordAction = new ChangePasswordAction(
+    new ChangePasswordService($userRepository),
+);
 
 $registerAuthRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/AuthRoutes.php';
-$registerAuthRoutes($app, $loginAction, $meAction, $jwtAuthMiddleware);
+$registerAuthRoutes($app, $loginAction, $meAction, $changePasswordAction, $jwtAuthMiddleware);
 
 $routeFiles = [
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php',
