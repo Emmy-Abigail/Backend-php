@@ -9,6 +9,7 @@ use App\Infrastructure\Adapter\In\Http\Action\Auth\LoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\MeAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\CreateUserAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
+use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlUserRepository;
 use App\Infrastructure\Adapter\Out\Security\JwtTokenService;
 use Slim\Factory\AppFactory;
@@ -32,6 +33,7 @@ $loginAction = new LoginAction(
 
 $authenticateTokenService = new AuthenticateTokenService($tokenService, $userRepository);
 $jwtAuthMiddleware = new JwtAuthMiddleware($authenticateTokenService);
+$adminRoleMiddleware = new RoleMiddleware('Admin');
 $meAction = new MeAction();
 
 $createUserAction = new CreateUserAction(
@@ -42,7 +44,7 @@ $registerAuthRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/
 $registerAuthRoutes($app, $loginAction, $meAction, $jwtAuthMiddleware);
 
 $registerUserRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php';
-$registerUserRoutes($app, $createUserAction);
+$registerUserRoutes($app, $createUserAction, $jwtAuthMiddleware, $adminRoleMiddleware);
 
 $routeFiles = [
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/PackageRoutes.php',

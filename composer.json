@@ -7,7 +7,8 @@
         "firebase/php-jwt": "^6.10"
     },
     "require-dev": {
-        "robmorgan/phinx": "^0.16.12"
+        "robmorgan/phinx": "^0.16.12",
+        "phpunit/phpunit": "^12"
     },
     "autoload": {
         "psr-4": {
@@ -15,6 +16,7 @@
         }
     },
     "scripts": {
+        "test": "phpunit",
         "migrate": "phinx migrate -c phinx.php",
         "migrate:status": "phinx status -c phinx.php",
         "migrate:rollback": "phinx rollback -c phinx.php"

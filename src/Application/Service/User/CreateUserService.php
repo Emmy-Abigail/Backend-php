@@ -9,6 +9,8 @@ use App\Application\Port\In\User\CreateUserCommand;
 use App\Application\Port\In\User\CreateUserResult;
 use App\Application\Port\In\User\CreateUserUseCase;
 use App\Application\Port\Out\Persistence\UserRepository;
+use App\Domain\User\PasswordPolicy;
+use RuntimeException;
 
 final readonly class CreateUserService implements CreateUserUseCase
 {
@@ -23,8 +25,12 @@ final readonly class CreateUserService implements CreateUserUseCase
             throw new EmailAlreadyExists();
         }
 
-        $temporaryPassword = bin2hex(random_bytes(5));
-        $passwordHash = password_hash($temporaryPassword, PASSWORD_BCRYPT);
+        $temporaryPassword = PasswordPolicy::generateTemporaryPassword();
+        $passwordHash = password_hash($temporaryPassword, PASSWORD_DEFAULT);
+
+        if ($passwordHash === false) {
+            throw new RuntimeException('No fue posible generar el hash de la contraseña temporal');
+        }
 
         $user = $this->userRepository->create(
             $command->names,

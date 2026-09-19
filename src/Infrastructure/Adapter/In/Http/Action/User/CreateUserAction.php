@@ -31,8 +31,13 @@ final readonly class CreateUserAction
         $phone = $body['telefono'] ?? null;
         $role = $body['rol'] ?? null;
 
-        if (!is_string($names) || trim($names) === '') {
+        if (!is_string($names)) {
             return $this->json($response, ['message' => 'El campo nombres es obligatorio'], 422);
+        }
+
+        $names = trim($names);
+        if ($names === '' || strlen($names) > 150) {
+            return $this->json($response, ['message' => 'El campo nombres debe tener entre 1 y 150 caracteres'], 422);
         }
 
         if (!is_string($email)) {
@@ -51,6 +56,15 @@ final readonly class CreateUserAction
 
         if ($phone !== null && !is_string($phone)) {
             return $this->json($response, ['message' => 'El campo telefono no es válido'], 422);
+        }
+
+        if (is_string($phone)) {
+            $phone = trim($phone);
+            if ($phone === '') {
+                $phone = null;
+            } elseif (strlen($phone) > 20) {
+                return $this->json($response, ['message' => 'El campo telefono no puede superar 20 caracteres'], 422);
+            }
         }
 
         try {

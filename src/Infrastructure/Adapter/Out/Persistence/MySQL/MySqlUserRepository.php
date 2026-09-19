@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Adapter\Out\Persistence\MySQL;
 
+use App\Application\Exception\EmailAlreadyExists;
 use App\Application\Port\Out\Persistence\UserRepository;
 use App\Domain\User\User;
+use Illuminate\Database\QueryException;
 
 final class MySqlUserRepository implements UserRepository
 {
@@ -45,15 +47,23 @@ final class MySqlUserRepository implements UserRepository
         string $passwordHash,
         string $role,
     ): User {
-        $record = UserRecord::query()->create([
-            'nombres' => $names,
-            'correo' => $email,
-            'telefono' => $phone,
-            'password_hash' => $passwordHash,
-            'rol' => $role,
-            'debe_cambiar_password' => true,
-            'activo' => true,
-        ]);
+        try {
+            $record = UserRecord::query()->create([
+                'nombres' => $names,
+                'correo' => $email,
+                'telefono' => $phone,
+                'password_hash' => $passwordHash,
+                'rol' => $role,
+                'debe_cambiar_password' => true,
+                'activo' => true,
+            ]);
+        } catch (QueryException $exception) {
+            if ($exception->getCode() === '23000' && str_contains($exception->getMessage(), 'uq_usuarios_correo')) {
+                throw new EmailAlreadyExists('Ya existe un usuario con ese correo', 0, $exception);
+            }
+
+            throw $exception;
+        }
 
         return $this->toDomain($record);
     }
