@@ -14,6 +14,7 @@ final readonly class User
         public string $role,
         public bool $active,
         public ?string $phone = null,
+        public bool $mustChangePassword = false,
     ) {
     }
 

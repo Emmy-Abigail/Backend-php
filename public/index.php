@@ -3,9 +3,11 @@
 declare(strict_types=1);
 
 use App\Application\Service\Auth\AuthenticateTokenService;
+use App\Application\Service\Auth\ChangePasswordService;
 use App\Application\Service\Auth\LoginService;
 use App\Application\Service\User\CreateUserService;
 use App\Application\Service\User\ListUsersService;
+use App\Infrastructure\Adapter\In\Http\Action\Auth\ChangePasswordAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\LoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\MeAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\CreateUserAction;
@@ -37,6 +39,9 @@ $authenticateTokenService = new AuthenticateTokenService($tokenService, $userRep
 $jwtAuthMiddleware = new JwtAuthMiddleware($authenticateTokenService);
 $adminRoleMiddleware = new RoleMiddleware('Admin');
 $meAction = new MeAction();
+$changePasswordAction = new ChangePasswordAction(
+    new ChangePasswordService($userRepository),
+);
 
 $createUserAction = new CreateUserAction(
     new CreateUserService($userRepository),
@@ -46,7 +51,7 @@ $listUsersAction = new ListUsersAction(
 );
 
 $registerAuthRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/AuthRoutes.php';
-$registerAuthRoutes($app, $loginAction, $meAction, $jwtAuthMiddleware);
+$registerAuthRoutes($app, $loginAction, $meAction, $changePasswordAction, $jwtAuthMiddleware);
 
 $registerUserRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php';
 $registerUserRoutes($app, $createUserAction, $listUsersAction, $jwtAuthMiddleware, $adminRoleMiddleware);

@@ -26,4 +26,6 @@ interface UserRepository
         string $passwordHash,
         string $role,
     ): User;
+
+    public function updatePassword(int $userId, string $newPasswordHash, bool $mustChangePassword = false): void;
 }

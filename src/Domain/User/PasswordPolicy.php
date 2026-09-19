@@ -15,7 +15,6 @@ final class PasswordPolicy
     private const UPPERCASE = 'ABCDEFGHJKMNPQRSTUVWXYZ';
     private const NUMBERS = '23456789';
     private const SYMBOLS = '!@#$%^&*_-+=';
-
     public static function isValid(string $password): bool
     {
         return strlen($password) >= self::MIN_LENGTH
