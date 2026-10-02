@@ -12,6 +12,7 @@ final class InitialAdministratorSeeder extends AbstractSeed
         $names = $this->requiredEnvironmentValue('INITIAL_ADMIN_NOMBRES');
         $email = strtolower($this->requiredEnvironmentValue('INITIAL_ADMIN_CORREO'));
         $password = $this->requiredEnvironmentValue('INITIAL_ADMIN_PASSWORD');
+        $dni = $_ENV['INITIAL_ADMIN_DNI'] ?? '00000000';
 
         if (strlen($names) > 150) {
             throw new RuntimeException('INITIAL_ADMIN_NOMBRES no puede superar 150 caracteres');
@@ -43,8 +44,11 @@ final class InitialAdministratorSeeder extends AbstractSeed
 
         $this->table('usuarios')->insert([
             'nombres' => $names,
+            'dni' => $dni,
             'correo' => $email,
-            'rol' => 'Admin',
+            'rol' => 'ADMINISTRADOR',
+            'id_sede' => null,
+            'id_tipo_vehiculo' => null,
             'password_hash' => $passwordHash,
             'debe_cambiar_password' => false,
             'activo' => true,

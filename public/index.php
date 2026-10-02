@@ -37,7 +37,7 @@ $loginAction = new LoginAction(
 
 $authenticateTokenService = new AuthenticateTokenService($tokenService, $userRepository);
 $jwtAuthMiddleware = new JwtAuthMiddleware($authenticateTokenService);
-$adminRoleMiddleware = new RoleMiddleware('Admin');
+$adminRoleMiddleware = new RoleMiddleware('ADMINISTRADOR', 'Admin');
 $meAction = new MeAction();
 $changePasswordAction = new ChangePasswordAction(
     new ChangePasswordService($userRepository),
