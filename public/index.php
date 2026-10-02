@@ -5,15 +5,24 @@ declare(strict_types=1);
 use App\Application\Service\Auth\AuthenticateTokenService;
 use App\Application\Service\Auth\ChangePasswordService;
 use App\Application\Service\Auth\LoginService;
+use App\Application\Service\Catalog\GetFailureReasonsService;
+use App\Application\Service\Catalog\GetGeographyService;
+use App\Application\Service\Catalog\GetSedesService;
+use App\Application\Service\Catalog\GetVehicleTypesService;
 use App\Application\Service\User\CreateUserService;
 use App\Application\Service\User\ListUsersService;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\ChangePasswordAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\LoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\MeAction;
+use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetFailureReasonsAction;
+use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetGeographyAction;
+use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetSedesAction;
+use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetVehicleTypesAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\CreateUserAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\ListUsersAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
+use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlCatalogRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlUserRepository;
 use App\Infrastructure\Adapter\Out\Security\JwtTokenService;
 use Slim\Factory\AppFactory;
@@ -55,6 +64,22 @@ $registerAuthRoutes($app, $loginAction, $meAction, $changePasswordAction, $jwtAu
 
 $registerUserRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php';
 $registerUserRoutes($app, $createUserAction, $listUsersAction, $jwtAuthMiddleware, $adminRoleMiddleware);
+
+// Catálogos
+$catalogRepository = new MySqlCatalogRepository();
+$getGeographyAction = new GetGeographyAction(new GetGeographyService($catalogRepository));
+$getSedesAction = new GetSedesAction(new GetSedesService($catalogRepository));
+$getVehicleTypesAction = new GetVehicleTypesAction(new GetVehicleTypesService($catalogRepository));
+$getFailureReasonsAction = new GetFailureReasonsAction(new GetFailureReasonsService($catalogRepository));
+
+$registerCatalogRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/CatalogRoutes.php';
+$registerCatalogRoutes(
+    $app,
+    $getGeographyAction,
+    $getSedesAction,
+    $getVehicleTypesAction,
+    $getFailureReasonsAction
+);
 
 $routeFiles = [
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/PackageRoutes.php',
