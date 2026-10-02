@@ -16,11 +16,15 @@ final class UserRecord extends Model
 
     protected $fillable = [
         'nombres',
+        'dni',
         'correo',
         'telefono',
-        'password_hash',
         'rol',
+        'id_sede',
+        'id_tipo_vehiculo',
+        'password_hash',
         'debe_cambiar_password',
+        'password_changed_at',
         'activo',
     ];
 
