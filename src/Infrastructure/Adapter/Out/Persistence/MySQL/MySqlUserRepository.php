@@ -115,6 +115,7 @@ final class MySqlUserRepository implements UserRepository
             ->update([
                 'password_hash' => $newPasswordHash,
                 'debe_cambiar_password' => $mustChangePassword,
+                'password_changed_at' => date('Y-m-d H:i:s'),
             ]);
     }
 

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 use App\Application\Service\Auth\AuthenticateTokenService;
 use App\Application\Service\Auth\ChangePasswordService;
+use App\Application\Service\Auth\ConfirmPasswordResetService;
 use App\Application\Service\Auth\LoginService;
+use App\Application\Service\Auth\RequestPasswordResetService;
 use App\Application\Service\Catalog\GetFailureReasonsService;
 use App\Application\Service\Catalog\GetGeographyService;
 use App\Application\Service\Catalog\GetSedesService;
@@ -13,8 +15,10 @@ use App\Application\Service\User\ChangeUserStatusService;
 use App\Application\Service\User\CreateUserService;
 use App\Application\Service\User\ListUsersService;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\ChangePasswordAction;
+use App\Infrastructure\Adapter\In\Http\Action\Auth\ConfirmPasswordResetAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\LoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\MeAction;
+use App\Infrastructure\Adapter\In\Http\Action\Auth\RequestPasswordResetAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetFailureReasonsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetGeographyAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetSedesAction;
@@ -26,6 +30,7 @@ use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
 use App\Infrastructure\Adapter\Out\Notification\SmtpUserCredentialsMailer;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlCatalogRepository;
+use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPasswordResetTokenRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlUserRepository;
 use App\Infrastructure\Adapter\Out\Security\JwtTokenService;
 use Slim\Factory\AppFactory;
@@ -37,6 +42,7 @@ $app = AppFactory::create();
 $app->addBodyParsingMiddleware();
 
 $userRepository = new MySqlUserRepository();
+$passwordResetTokenRepository = new MySqlPasswordResetTokenRepository();
 $catalogRepository = new MySqlCatalogRepository();
 $tokenService = new JwtTokenService(
     $_ENV['JWT_SECRET'],
@@ -56,18 +62,27 @@ $changePasswordAction = new ChangePasswordAction(
     new ChangePasswordService($userRepository),
 );
 
+$mailer = new SmtpUserCredentialsMailer(
+    $_ENV['MAIL_HOST'],
+    (int) $_ENV['MAIL_PORT'],
+    $_ENV['MAIL_USERNAME'],
+    $_ENV['MAIL_PASSWORD'],
+    $_ENV['MAIL_FROM_ADDRESS'],
+    $_ENV['MAIL_FROM_NAME'],
+    $_ENV['PASSWORD_RESET_URL'] ?? null,
+);
+$requestPasswordResetAction = new RequestPasswordResetAction(
+    new RequestPasswordResetService($userRepository, $passwordResetTokenRepository, $mailer),
+);
+$confirmPasswordResetAction = new ConfirmPasswordResetAction(
+    new ConfirmPasswordResetService($userRepository, $passwordResetTokenRepository),
+);
+
 $createUserAction = new CreateUserAction(
     new CreateUserService(
         $userRepository,
         $catalogRepository,
-        new SmtpUserCredentialsMailer(
-            $_ENV['MAIL_HOST'],
-            (int) $_ENV['MAIL_PORT'],
-            $_ENV['MAIL_USERNAME'],
-            $_ENV['MAIL_PASSWORD'],
-            $_ENV['MAIL_FROM_ADDRESS'],
-            $_ENV['MAIL_FROM_NAME'],
-        ),
+        $mailer,
     ),
 );
 $listUsersAction = new ListUsersAction(
@@ -78,7 +93,15 @@ $changeUserStatusAction = new ChangeUserStatusAction(
 );
 
 $registerAuthRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/AuthRoutes.php';
-$registerAuthRoutes($app, $loginAction, $meAction, $changePasswordAction, $jwtAuthMiddleware);
+$registerAuthRoutes(
+    $app,
+    $loginAction,
+    $meAction,
+    $changePasswordAction,
+    $requestPasswordResetAction,
+    $confirmPasswordResetAction,
+    $jwtAuthMiddleware,
+);
 
 $registerUserRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php';
 $registerUserRoutes($app, $createUserAction, $listUsersAction, $changeUserStatusAction, $jwtAuthMiddleware, $adminRoleMiddleware);
