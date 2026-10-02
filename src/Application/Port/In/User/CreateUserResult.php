@@ -11,7 +11,6 @@ final readonly class CreateUserResult
         public string $names,
         public string $email,
         public string $role,
-        public string $temporaryPassword,
     ) {
     }
 }

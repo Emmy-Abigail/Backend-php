@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\Application\Service\User;
 
 use App\Application\Exception\EmailAlreadyExists;
+use App\Application\Exception\EmailDeliveryFailed;
 use App\Application\Port\In\User\CreateUserCommand;
 use App\Application\Port\In\User\CreateUserResult;
 use App\Application\Port\In\User\CreateUserUseCase;
+use App\Application\Port\Out\Notification\UserCredentialsMailer;
 use App\Application\Port\Out\Persistence\UserRepository;
 use App\Domain\User\PasswordPolicy;
 use RuntimeException;
@@ -16,6 +18,7 @@ final readonly class CreateUserService implements CreateUserUseCase
 {
     public function __construct(
         private UserRepository $userRepository,
+        private UserCredentialsMailer $userCredentialsMailer,
     ) {
     }
 
@@ -40,12 +43,23 @@ final readonly class CreateUserService implements CreateUserUseCase
             $command->role,
         );
 
+        try {
+            $this->userCredentialsMailer->sendTemporaryPassword(
+                $user->names,
+                $user->email,
+                $temporaryPassword,
+            );
+        } catch (EmailDeliveryFailed $exception) {
+            $this->userRepository->deleteById($user->id);
+
+            throw $exception;
+        }
+
         return new CreateUserResult(
             $user->id,
             $user->names,
             $user->email,
             $user->role,
-            $temporaryPassword,
         );
     }
 }

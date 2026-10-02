@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Infrastructure\Adapter\In\Http\Action\User;
 
 use App\Application\Exception\EmailAlreadyExists;
+use App\Application\Exception\EmailDeliveryFailed;
 use App\Application\Port\In\User\CreateUserCommand;
 use App\Application\Port\In\User\CreateUserUseCase;
 use Psr\Http\Message\ResponseInterface;
@@ -73,6 +74,8 @@ final readonly class CreateUserAction
             );
         } catch (EmailAlreadyExists) {
             return $this->json($response, ['message' => 'Ya existe un usuario con ese correo'], 409);
+        } catch (EmailDeliveryFailed) {
+            return $this->json($response, ['message' => 'No fue posible enviar las credenciales por correo; el usuario no fue creado'], 502);
         }
 
         return $this->json($response, [
@@ -80,7 +83,6 @@ final readonly class CreateUserAction
             'nombres' => $result->names,
             'correo' => $result->email,
             'rol' => $result->role,
-            'password_temporal' => $result->temporaryPassword,
         ], 201);
     }
 

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Tests\Unit\Application\Service\User;
 
 use App\Application\Exception\EmailAlreadyExists;
+use App\Application\Exception\EmailDeliveryFailed;
 use App\Application\Port\In\User\CreateUserCommand;
+use App\Application\Port\Out\Notification\UserCredentialsMailer;
 use App\Application\Port\Out\Persistence\UserRepository;
 use App\Application\Service\User\CreateUserService;
 use App\Domain\User\PasswordPolicy;
@@ -19,6 +21,7 @@ final class CreateUserServiceTest extends TestCase
     public function crea_un_usuario_con_contrasena_temporal_fuerte_y_solicita_su_cambio(): void
     {
         $generatedHash = null;
+        $temporaryPasswordSent = null;
         $repository = $this->createMock(UserRepository::class);
         $repository->expects($this->once())
             ->method('existsByEmail')
@@ -31,14 +34,23 @@ final class CreateUserServiceTest extends TestCase
 
                 return new User(2, $names, $email, $passwordHash, $role, true);
             });
+        $mailer = $this->createMock(UserCredentialsMailer::class);
+        $mailer->expects($this->once())
+            ->method('sendTemporaryPassword')
+            ->willReturnCallback(function (string $name, string $email, string $password) use (&$temporaryPasswordSent): void {
+                self::assertSame('Conductor Uno', $name);
+                self::assertSame('conductor@email.com', $email);
+                $temporaryPasswordSent = $password;
+            });
 
-        $result = (new CreateUserService($repository))->execute(
+        $result = (new CreateUserService($repository, $mailer))->execute(
             new CreateUserCommand('Conductor Uno', 'conductor@email.com', '999888777', 'Conductor'),
         );
 
-        self::assertTrue(PasswordPolicy::isValid($result->temporaryPassword));
+        self::assertIsString($temporaryPasswordSent);
+        self::assertTrue(PasswordPolicy::isValid($temporaryPasswordSent));
         self::assertIsString($generatedHash);
-        self::assertTrue(password_verify($result->temporaryPassword, $generatedHash));
+        self::assertTrue(password_verify($temporaryPasswordSent, $generatedHash));
         self::assertSame(2, $result->id);
         self::assertSame('Conductor', $result->role);
     }
@@ -51,8 +63,10 @@ final class CreateUserServiceTest extends TestCase
             ->method('existsByEmail')
             ->willReturn(true);
         $repository->expects($this->never())->method('create');
+        $mailer = $this->createMock(UserCredentialsMailer::class);
+        $mailer->expects($this->never())->method('sendTemporaryPassword');
 
-        $service = new CreateUserService($repository);
+        $service = new CreateUserService($repository, $mailer);
 
         $this->expectException(EmailAlreadyExists::class);
         $service->execute(new CreateUserCommand('Conductor Uno', 'existe@email.com', null, 'Conductor'));
@@ -68,10 +82,33 @@ final class CreateUserServiceTest extends TestCase
         $repository->expects($this->once())
             ->method('create')
             ->willThrowException(new EmailAlreadyExists());
+        $mailer = $this->createMock(UserCredentialsMailer::class);
+        $mailer->expects($this->never())->method('sendTemporaryPassword');
 
-        $service = new CreateUserService($repository);
+        $service = new CreateUserService($repository, $mailer);
 
         $this->expectException(EmailAlreadyExists::class);
         $service->execute(new CreateUserCommand('Conductor Uno', 'duplicado@email.com', null, 'Conductor'));
+    }
+
+    #[Test]
+    public function elimina_el_usuario_si_no_puede_enviar_las_credenciales(): void
+    {
+        $repository = $this->createMock(UserRepository::class);
+        $repository->method('existsByEmail')->willReturn(false);
+        $repository->expects($this->once())
+            ->method('create')
+            ->willReturn(new User(2, 'Conductor Uno', 'conductor@email.com', 'hash', 'Conductor', true));
+        $repository->expects($this->once())->method('deleteById')->with(2);
+
+        $mailer = $this->createMock(UserCredentialsMailer::class);
+        $mailer->expects($this->once())
+            ->method('sendTemporaryPassword')
+            ->willThrowException(new EmailDeliveryFailed());
+
+        $service = new CreateUserService($repository, $mailer);
+
+        $this->expectException(EmailDeliveryFailed::class);
+        $service->execute(new CreateUserCommand('Conductor Uno', 'conductor@email.com', null, 'Conductor'));
     }
 }

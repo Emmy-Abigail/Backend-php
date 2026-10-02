@@ -92,6 +92,11 @@ final class MySqlUserRepository implements UserRepository
             ]);
     }
 
+    public function deleteById(int $userId): void
+    {
+        UserRecord::query()->where('id', $userId)->delete();
+    }
+
     private function toDomain(UserRecord $record): User
     {
         return new User(

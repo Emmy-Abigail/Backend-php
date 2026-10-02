@@ -55,7 +55,7 @@ final class UserRoutesTest extends TestCase
     private function appForRole(string $role): \Slim\App
     {
         $useCase = $this->createStub(CreateUserUseCase::class);
-        $useCase->method('execute')->willReturn(new CreateUserResult(2, 'Usuario', 'usuario@email.com', 'Conductor', 'Temporal1!abc'));
+        $useCase->method('execute')->willReturn(new CreateUserResult(2, 'Usuario', 'usuario@email.com', 'Conductor'));
         $action = new CreateUserAction($useCase);
 
         $listUsersUseCase = $this->createStub(ListUsersUseCase::class);
