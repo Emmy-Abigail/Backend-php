@@ -125,6 +125,11 @@ final class MySqlUserRepository implements UserRepository
             ->update(['activo' => $active]);
     }
 
+    public function deleteById(int $userId): void
+    {
+        UserRecord::query()->where('id', $userId)->delete();
+    }
+
     private function toDomain(UserRecord $record): User
     {
         return new User(

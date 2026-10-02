@@ -32,6 +32,8 @@ interface UserRepository
         ?int $idTipoVehiculo,
     ): User;
 
+    public function deleteById(int $userId): void;
+
     public function updatePassword(int $userId, string $newPasswordHash, bool $mustChangePassword = false): void;
 
     public function updateStatus(int $userId, bool $active): void;

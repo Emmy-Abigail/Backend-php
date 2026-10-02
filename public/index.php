@@ -24,6 +24,7 @@ use App\Infrastructure\Adapter\In\Http\Action\User\CreateUserAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\ListUsersAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
+use App\Infrastructure\Adapter\Out\Notification\SmtpUserCredentialsMailer;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlCatalogRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlUserRepository;
 use App\Infrastructure\Adapter\Out\Security\JwtTokenService;
@@ -56,7 +57,18 @@ $changePasswordAction = new ChangePasswordAction(
 );
 
 $createUserAction = new CreateUserAction(
-    new CreateUserService($userRepository, $catalogRepository),
+    new CreateUserService(
+        $userRepository,
+        $catalogRepository,
+        new SmtpUserCredentialsMailer(
+            $_ENV['MAIL_HOST'],
+            (int) $_ENV['MAIL_PORT'],
+            $_ENV['MAIL_USERNAME'],
+            $_ENV['MAIL_PASSWORD'],
+            $_ENV['MAIL_FROM_ADDRESS'],
+            $_ENV['MAIL_FROM_NAME'],
+        ),
+    ),
 );
 $listUsersAction = new ListUsersAction(
     new ListUsersService($userRepository),

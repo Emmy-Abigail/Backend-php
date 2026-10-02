@@ -6,11 +6,13 @@ namespace App\Application\Service\User;
 
 use App\Application\Exception\DniAlreadyExists;
 use App\Application\Exception\EmailAlreadyExists;
+use App\Application\Exception\EmailDeliveryFailed;
 use App\Application\Exception\InvalidCatalogReference;
 use App\Application\Port\In\User\CreateUserCommand;
 use App\Application\Port\In\User\CreateUserResult;
 use App\Application\Port\In\User\CreateUserUseCase;
 use App\Application\Port\Out\Catalog\CatalogRepository;
+use App\Application\Port\Out\Notification\UserCredentialsMailer;
 use App\Application\Port\Out\Persistence\UserRepository;
 use App\Domain\User\PasswordPolicy;
 use RuntimeException;
@@ -20,6 +22,7 @@ final readonly class CreateUserService implements CreateUserUseCase
     public function __construct(
         private UserRepository $userRepository,
         private CatalogRepository $catalogRepository,
+        private UserCredentialsMailer $userCredentialsMailer,
     ) {
     }
 
@@ -72,6 +75,18 @@ final readonly class CreateUserService implements CreateUserUseCase
             $command->idSede,
             $command->idTipoVehiculo,
         );
+
+        try {
+            $this->userCredentialsMailer->sendTemporaryPassword(
+                $user->names,
+                $user->email,
+                $temporaryPassword,
+            );
+        } catch (EmailDeliveryFailed $exception) {
+            $this->userRepository->deleteById($user->id);
+
+            throw $exception;
+        }
 
         return new CreateUserResult(
             $user->id,

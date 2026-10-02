@@ -6,6 +6,7 @@ namespace App\Infrastructure\Adapter\In\Http\Action\User;
 
 use App\Application\Exception\DniAlreadyExists;
 use App\Application\Exception\EmailAlreadyExists;
+use App\Application\Exception\EmailDeliveryFailed;
 use App\Application\Exception\InvalidCatalogReference;
 use App\Application\Port\In\User\CreateUserCommand;
 use App\Application\Port\In\User\CreateUserUseCase;
@@ -104,6 +105,8 @@ final readonly class CreateUserAction
             return $this->json($response, ['message' => 'Ya existe un usuario con ese DNI'], 409);
         } catch (InvalidCatalogReference $exception) {
             return $this->json($response, ['message' => $exception->getMessage()], 422);
+        } catch (EmailDeliveryFailed) {
+            return $this->json($response, ['message' => 'No fue posible enviar las credenciales por correo; el usuario no fue creado'], 502);
         }
 
         return $this->json($response, [

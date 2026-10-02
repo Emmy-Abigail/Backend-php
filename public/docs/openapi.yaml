@@ -108,7 +108,7 @@ paths:
     post:
       tags: [Usuarios]
       summary: Crear un usuario
-      description: Requiere un JWT de un usuario con rol Admin. La contraseña temporal se muestra una sola vez.
+      description: Requiere un JWT de un usuario con rol Admin. La contraseña temporal se envía únicamente al correo registrado.
       security:
         - bearerAuth: []
       requestBody:
@@ -130,6 +130,12 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           description: Ya existe un usuario con ese correo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '502':
+          description: No fue posible enviar las credenciales y el usuario no fue creado.
           content:
             application/json:
               schema:
@@ -392,7 +398,7 @@ components:
           example: Conductor
     CreateUserResponse:
       type: object
-      required: [id, nombres, correo, rol, password_temporal]
+      required: [id, nombres, correo, rol]
       properties:
         id:
           type: integer
@@ -405,9 +411,6 @@ components:
         rol:
           type: string
           enum: [Admin, Conductor]
-        password_temporal:
-          type: string
-          description: Se devuelve únicamente al crear el usuario; no se almacena sin hash.
     User:
       type: object
       required: [id, nombres, correo, rol]

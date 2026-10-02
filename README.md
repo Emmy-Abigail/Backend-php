@@ -20,6 +20,10 @@ docker compose up -d --build
 
 El primer arranque crea un administrador de desarrollo con las variables `INITIAL_ADMIN_NOMBRES`, `INITIAL_ADMIN_CORREO` e `INITIAL_ADMIN_PASSWORD` de `.env`. La contraseña se hashea y el seeder no duplica al administrador en reinicios posteriores.
 
+## Correo de credenciales
+
+Al crear un usuario, su contraseña temporal se envía solamente a su correo y debe cambiarse en el primer inicio de sesión. Configura `MAIL_HOST=smtp.gmail.com`, `MAIL_PORT=587`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS` y `MAIL_FROM_NAME` en `.env`. Para Gmail, `MAIL_PASSWORD` debe ser una contraseña de aplicación de Google, no la contraseña normal de la cuenta.
+
 Para detener los servicios conservando los datos:
 
 ```powershell
