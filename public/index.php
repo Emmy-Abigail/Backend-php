@@ -9,6 +9,7 @@ use App\Application\Service\Catalog\GetFailureReasonsService;
 use App\Application\Service\Catalog\GetGeographyService;
 use App\Application\Service\Catalog\GetSedesService;
 use App\Application\Service\Catalog\GetVehicleTypesService;
+use App\Application\Service\User\ChangeUserStatusService;
 use App\Application\Service\User\CreateUserService;
 use App\Application\Service\User\ListUsersService;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\ChangePasswordAction;
@@ -18,6 +19,7 @@ use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetFailureReasonsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetGeographyAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetSedesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetVehicleTypesAction;
+use App\Infrastructure\Adapter\In\Http\Action\User\ChangeUserStatusAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\CreateUserAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\ListUsersAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
@@ -34,6 +36,7 @@ $app = AppFactory::create();
 $app->addBodyParsingMiddleware();
 
 $userRepository = new MySqlUserRepository();
+$catalogRepository = new MySqlCatalogRepository();
 $tokenService = new JwtTokenService(
     $_ENV['JWT_SECRET'],
     $_ENV['JWT_ISSUER'],
@@ -53,20 +56,22 @@ $changePasswordAction = new ChangePasswordAction(
 );
 
 $createUserAction = new CreateUserAction(
-    new CreateUserService($userRepository),
+    new CreateUserService($userRepository, $catalogRepository),
 );
 $listUsersAction = new ListUsersAction(
     new ListUsersService($userRepository),
+);
+$changeUserStatusAction = new ChangeUserStatusAction(
+    new ChangeUserStatusService($userRepository),
 );
 
 $registerAuthRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/AuthRoutes.php';
 $registerAuthRoutes($app, $loginAction, $meAction, $changePasswordAction, $jwtAuthMiddleware);
 
 $registerUserRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php';
-$registerUserRoutes($app, $createUserAction, $listUsersAction, $jwtAuthMiddleware, $adminRoleMiddleware);
+$registerUserRoutes($app, $createUserAction, $listUsersAction, $changeUserStatusAction, $jwtAuthMiddleware, $adminRoleMiddleware);
 
 // Catálogos
-$catalogRepository = new MySqlCatalogRepository();
 $getGeographyAction = new GetGeographyAction(new GetGeographyService($catalogRepository));
 $getSedesAction = new GetSedesAction(new GetSedesService($catalogRepository));
 $getVehicleTypesAction = new GetVehicleTypesAction(new GetVehicleTypesService($catalogRepository));

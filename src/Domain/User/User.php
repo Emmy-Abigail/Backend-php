@@ -15,6 +15,9 @@ final readonly class User
         public bool $active,
         public ?string $phone = null,
         public bool $mustChangePassword = false,
+        public string $dni = '',
+        public ?int $idSede = null,
+        public ?int $idTipoVehiculo = null,
     ) {
     }
 

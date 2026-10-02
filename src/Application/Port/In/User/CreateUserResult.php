@@ -9,8 +9,11 @@ final readonly class CreateUserResult
     public function __construct(
         public int $id,
         public string $names,
+        public string $dni,
         public string $email,
         public string $role,
+        public ?int $idSede,
+        public ?int $idTipoVehiculo,
         public string $temporaryPassword,
     ) {
     }

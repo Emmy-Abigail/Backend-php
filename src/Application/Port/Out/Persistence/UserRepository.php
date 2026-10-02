@@ -15,17 +15,24 @@ interface UserRepository
     /**
      * @return list<User>
      */
-    public function findAll(): array;
+    public function findAll(?string $role = null, ?int $idSede = null): array;
 
     public function existsByEmail(string $email): bool;
 
+    public function existsByDni(string $dni): bool;
+
     public function create(
         string $names,
+        string $dni,
         string $email,
         ?string $phone,
         string $passwordHash,
         string $role,
+        ?int $idSede,
+        ?int $idTipoVehiculo,
     ): User;
 
     public function updatePassword(int $userId, string $newPasswordHash, bool $mustChangePassword = false): void;
+
+    public function updateStatus(int $userId, bool $active): void;
 }

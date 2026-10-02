@@ -16,7 +16,7 @@ final readonly class ListUsersService implements ListUsersUseCase
     {
     }
 
-    public function execute(): ListUsersResult
+    public function execute(?string $role = null, ?int $idSede = null): ListUsersResult
     {
         $users = array_map(
             static fn (User $user): UserListItem => new UserListItem(
@@ -27,7 +27,7 @@ final readonly class ListUsersService implements ListUsersUseCase
                 $user->role,
                 $user->active,
             ),
-            $this->userRepository->findAll(),
+            $this->userRepository->findAll($role, $idSede),
         );
 
         return new ListUsersResult($users);
