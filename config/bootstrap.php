@@ -23,6 +23,12 @@ $dotenv->required([
     'JWT_SECRET',
     'JWT_ISSUER',
     'JWT_TTL_SECONDS',
+    'MAIL_HOST',
+    'MAIL_PORT',
+    'MAIL_USERNAME',
+    'MAIL_PASSWORD',
+    'MAIL_FROM_ADDRESS',
+    'MAIL_FROM_NAME',
 ])->notEmpty();
 
 /** @var callable(): Capsule $connectDatabase */

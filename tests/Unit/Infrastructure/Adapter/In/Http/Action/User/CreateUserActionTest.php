@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Infrastructure\Adapter\In\Http\Action\User;
 
 use App\Application\Exception\EmailAlreadyExists;
+use App\Application\Exception\EmailDeliveryFailed;
 use App\Application\Port\In\User\CreateUserCommand;
 use App\Application\Port\In\User\CreateUserResult;
 use App\Application\Port\In\User\CreateUserUseCase;
@@ -39,7 +40,7 @@ final class CreateUserActionTest extends TestCase
             ->with($this->callback(static fn (CreateUserCommand $command): bool => $command->names === 'Juan Pérez'
                 && $command->email === 'juan@email.com'
                 && $command->phone === '999888777'))
-            ->willReturn(new CreateUserResult(2, 'Juan Pérez', 'juan@email.com', 'Conductor', 'Temporal1!abc'));
+            ->willReturn(new CreateUserResult(2, 'Juan Pérez', 'juan@email.com', 'Conductor'));
 
         $response = (new CreateUserAction($useCase))(
             $this->request([
@@ -52,7 +53,7 @@ final class CreateUserActionTest extends TestCase
         );
 
         self::assertSame(201, $response->getStatusCode());
-        self::assertSame('Temporal1!abc', json_decode((string) $response->getBody(), true)['password_temporal']);
+        self::assertArrayNotHasKey('password_temporal', json_decode((string) $response->getBody(), true));
     }
 
     #[Test]
@@ -95,4 +96,23 @@ final class CreateUserActionTest extends TestCase
 
         self::assertSame(409, $response->getStatusCode());
     }
+
+    #[Test]
+    public function informa_cuando_no_se_pudieron_enviar_las_credenciales(): void
+    {
+        $useCase = $this->createStub(CreateUserUseCase::class);
+        $useCase->method('execute')->willThrowException(new EmailDeliveryFailed());
+
+        $response = (new CreateUserAction($useCase))(
+            $this->request([
+                'nombres' => 'Usuario',
+                'correo' => 'usuario@email.com',
+                'rol' => 'Conductor',
+            ]),
+            $this->response(),
+        );
+
+        self::assertSame(502, $response->getStatusCode());
+    }
+
 }

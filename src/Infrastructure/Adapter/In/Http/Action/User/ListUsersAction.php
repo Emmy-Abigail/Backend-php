@@ -12,18 +12,35 @@ use Psr\Http\Message\ServerRequestInterface;
 
 final readonly class ListUsersAction
 {
+    private const ALLOWED_ROLES = ['ADMINISTRADOR', 'OPERADOR', 'CONDUCTOR'];
+
     public function __construct(private ListUsersUseCase $listUsersUseCase)
     {
     }
 
     public function __invoke(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        $result = $this->listUsersUseCase->execute();
+        $queryParams = $request->getQueryParams();
 
-        return $this->json($response, $result);
+        $role = $queryParams['rol'] ?? null;
+        if ($role !== null && !in_array($role, self::ALLOWED_ROLES, true)) {
+            return $this->json($response, ['message' => 'El filtro rol no es vÃ¡lido'], 422);
+        }
+
+        $idSede = null;
+        if (isset($queryParams['sede']) && $queryParams['sede'] !== '') {
+            if (!is_numeric($queryParams['sede'])) {
+                return $this->json($response, ['message' => 'El filtro sede debe ser numÃ©rico'], 422);
+            }
+            $idSede = (int) $queryParams['sede'];
+        }
+
+        $result = $this->listUsersUseCase->execute($role, $idSede);
+
+        return $this->jsonResult($response, $result);
     }
 
-    private function json(ResponseInterface $response, ListUsersResult $result): ResponseInterface
+    private function jsonResult(ResponseInterface $response, ListUsersResult $result): ResponseInterface
     {
         $response->getBody()->write(json_encode([
             'data' => array_map(
@@ -40,5 +57,17 @@ final readonly class ListUsersAction
         ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
 
         return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function json(ResponseInterface $response, array $payload, int $status = 200): ResponseInterface
+    {
+        $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+
+        return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus($status);
     }
 }
