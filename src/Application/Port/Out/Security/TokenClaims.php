@@ -9,6 +9,8 @@ final readonly class TokenClaims
     public function __construct(
         public int $userId,
         public string $role,
+        public ?int $sedeId = null,
+        public ?int $issuedAt = null,
     ) {
     }
 }

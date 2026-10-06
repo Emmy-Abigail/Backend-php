@@ -63,10 +63,10 @@ $tokenService = new JwtTokenService(
 );
 
 $loginAction = new LoginAction(
-    new LoginService($userRepository, $tokenService),
+    new LoginService($userRepository, $tokenService, $catalogRepository),
 );
 
-$authenticateTokenService = new AuthenticateTokenService($tokenService, $userRepository);
+$authenticateTokenService = new AuthenticateTokenService($tokenService, $userRepository, $catalogRepository);
 $jwtAuthMiddleware = new JwtAuthMiddleware($authenticateTokenService);
 $adminRoleMiddleware = new RoleMiddleware('ADMINISTRADOR', 'Admin');
 $meAction = new MeAction();

@@ -8,6 +8,7 @@ use App\Application\Exception\InvalidCredentials;
 use App\Application\Port\In\Auth\LoginCommand;
 use App\Application\Port\In\Auth\LoginResult;
 use App\Application\Port\In\Auth\LoginUseCase;
+use App\Application\Port\Out\Catalog\CatalogRepository;
 use App\Application\Port\Out\Persistence\UserRepository;
 use App\Application\Port\Out\Security\TokenService;
 
@@ -16,6 +17,7 @@ final readonly class LoginService implements LoginUseCase
     public function __construct(
         private UserRepository $userRepository,
         private TokenService $tokenService,
+        private ?CatalogRepository $catalogRepository = null,
     ) {
     }
 
@@ -25,6 +27,16 @@ final readonly class LoginService implements LoginUseCase
 
         if ($user === null || !$user->active || !$user->passwordMatches($command->password)) {
             throw new InvalidCredentials();
+        }
+
+        $sedeNombre = null;
+        if ($user->role === 'OPERADOR' && $user->idSede !== null && $this->catalogRepository !== null) {
+            foreach ($this->catalogRepository->getSedes() as $sede) {
+                if ($sede->id === $user->idSede) {
+                    $sedeNombre = $sede->nombre;
+                    break;
+                }
+            }
         }
 
         $issuedToken = $this->tokenService->issue($user);
@@ -37,6 +49,9 @@ final readonly class LoginService implements LoginUseCase
             $issuedToken->token,
             'Bearer',
             $issuedToken->expiresAt,
+            $user->mustChangePassword,
+            $user->idSede,
+            $sedeNombre,
         );
     }
 }

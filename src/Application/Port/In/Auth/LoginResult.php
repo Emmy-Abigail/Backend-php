@@ -16,6 +16,9 @@ final readonly class LoginResult
         public string $token,
         public string $tokenType,
         public DateTimeImmutable $expiresAt,
+        public bool $mustChangePassword = false,
+        public ?int $idSede = null,
+        public ?string $sedeNombre = null,
     ) {
     }
 }

@@ -7,6 +7,7 @@ namespace App\Application\Service\Auth;
 use App\Application\Exception\UserNotAllowed;
 use App\Application\Port\In\Auth\AuthenticatedUser;
 use App\Application\Port\In\Auth\AuthenticateTokenUseCase;
+use App\Application\Port\Out\Catalog\CatalogRepository;
 use App\Application\Port\Out\Persistence\UserRepository;
 use App\Application\Port\Out\Security\TokenService;
 
@@ -15,6 +16,7 @@ final readonly class AuthenticateTokenService implements AuthenticateTokenUseCas
     public function __construct(
         private TokenService $tokenService,
         private UserRepository $userRepository,
+        private ?CatalogRepository $catalogRepository = null,
     ) {
     }
 
@@ -28,11 +30,24 @@ final readonly class AuthenticateTokenService implements AuthenticateTokenUseCas
             throw new UserNotAllowed();
         }
 
+        $sedeNombre = null;
+        if ($user->role === 'OPERADOR' && $user->idSede !== null && $this->catalogRepository !== null) {
+            foreach ($this->catalogRepository->getSedes() as $sede) {
+                if ($sede->id === $user->idSede) {
+                    $sedeNombre = $sede->nombre;
+                    break;
+                }
+            }
+        }
+
         return new AuthenticatedUser(
             $user->id,
             $user->names,
             $user->email,
             $user->role,
+            $user->mustChangePassword,
+            $user->idSede,
+            $sedeNombre,
         );
     }
 }
