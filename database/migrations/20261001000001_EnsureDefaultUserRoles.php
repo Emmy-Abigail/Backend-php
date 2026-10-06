@@ -8,16 +8,27 @@ final class EnsureDefaultUserRoles extends AbstractMigration
 {
     public function up(): void
     {
-        $roleColumn = $this->fetchRow("SHOW COLUMNS FROM usuarios LIKE 'rol'");
-        if ($roleColumn !== [] && str_contains((string) $roleColumn['Type'], "'SuperAdmin'")) {
-            $this->execute("UPDATE usuarios SET rol = 'Admin' WHERE rol = 'SuperAdmin'");
+        if (!$this->hasTable('usuarios')) {
+            return;
         }
 
-        $this->execute("ALTER TABLE usuarios MODIFY rol ENUM('Admin', 'Conductor') NOT NULL");
+        $row = $this->fetchRow("SHOW COLUMNS FROM usuarios LIKE 'rol'");
+        if (!$row || !isset($row['Type'])) {
+            return;
+        }
+
+        $columnType = (string) $row['Type'];
+
+        $hasLegacy = str_contains($columnType, "'Admin'") || str_contains($columnType, "'SuperAdmin'");
+        $hasV3 = str_contains($columnType, "'ADMINISTRADOR'");
+
+        if ($hasLegacy && !$hasV3) {
+            $this->execute("ALTER TABLE usuarios MODIFY rol ENUM('ADMINISTRADOR', 'OPERADOR', 'CONDUCTOR') NOT NULL");
+        }
     }
 
     public function down(): void
     {
-        $this->execute("ALTER TABLE usuarios MODIFY rol ENUM('Admin', 'Conductor') NOT NULL");
+        // No-op para mantener consistencia y evitar regresiones
     }
 }
