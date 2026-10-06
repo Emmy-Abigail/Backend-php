@@ -23,33 +23,48 @@ final readonly class ConfirmPasswordResetAction
         $body = $request->getParsedBody();
 
         if (!is_array($body)) {
-            return $this->json($response, ['message' => 'El cuerpo debe ser un objeto JSON válido'], 400);
+            return $this->json($response, ['message' => 'El cuerpo debe ser un objeto JSON válido', 'error' => 'cuerpo_invalido'], 400);
         }
 
         $token = $body['token'] ?? null;
         $newPassword = $body['password_nuevo'] ?? $body['nueva_password'] ?? $body['new_password'] ?? null;
 
         if (!is_string($token) || !preg_match('/\\A[a-f0-9]{64}\\z/i', $token)) {
-            return $this->json($response, ['message' => 'El token de recuperación no es válido o ha expirado'], 422);
+            return $this->json($response, [
+                'message' => 'El enlace no es válido o expiró',
+                'error' => 'token_invalido',
+            ], 400);
         }
 
         if (!is_string($newPassword) || $newPassword === '') {
-            return $this->json($response, ['message' => 'El campo password_nuevo es obligatorio'], 422);
+            return $this->json($response, [
+                'message' => 'El campo password_nuevo es obligatorio',
+                'error' => 'campo_obligatorio',
+            ], 422);
         }
 
         try {
             $this->confirmPasswordResetUseCase->execute(new ConfirmPasswordResetCommand(strtolower($token), $newPassword));
         } catch (InvalidPasswordResetToken) {
-            return $this->json($response, ['message' => 'El token de recuperación no es válido o ha expirado'], 422);
+            return $this->json($response, [
+                'message' => 'El enlace no es válido o expiró',
+                'error' => 'token_invalido',
+            ], 400);
         } catch (SamePasswordException) {
-            return $this->json($response, ['message' => 'La nueva contraseña debe ser diferente a la actual'], 422);
+            return $this->json($response, [
+                'message' => 'La nueva contraseña debe ser diferente a la actual',
+                'error' => 'password_invalida',
+            ], 422);
         } catch (WeakPasswordException) {
             return $this->json($response, [
-                'message' => 'La nueva contraseña no cumple con la política de seguridad (mínimo 12 caracteres, mayúscula, minúscula, número y símbolo)',
+                'message' => 'La nueva contraseña no cumple con la política de seguridad (mínimo 8 caracteres, una mayúscula, un número y un símbolo de @ # $ % &)',
+                'error' => 'password_invalida',
             ], 422);
         }
 
-        return $this->json($response, ['message' => 'Contraseña restablecida exitosamente'], 200);
+        return $this->json($response, [
+            'message' => 'Contraseña restablecida exitosamente',
+        ], 200);
     }
 
     /**

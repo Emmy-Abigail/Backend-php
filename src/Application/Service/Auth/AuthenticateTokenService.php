@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Application\Service\Auth;
 
+use App\Application\Exception\InvalidToken;
 use App\Application\Exception\UserNotAllowed;
 use App\Application\Port\In\Auth\AuthenticatedUser;
 use App\Application\Port\In\Auth\AuthenticateTokenUseCase;
@@ -28,6 +29,13 @@ final readonly class AuthenticateTokenService implements AuthenticateTokenUseCas
 
         if ($user === null || !$user->active) {
             throw new UserNotAllowed();
+        }
+
+        // Revocación: Si la contraseña fue cambiada DESPUÉS de que se emitió este token, invalidarlo
+        if ($user->passwordChangedAt !== null && $claims->issuedAt !== null) {
+            if ($claims->issuedAt < $user->passwordChangedAt->getTimestamp()) {
+                throw new InvalidToken();
+            }
         }
 
         $sedeNombre = null;

@@ -1,83 +1,87 @@
-# Sistema de Gestión de Envíos — Backend PHP
+# Sistema de Gestión de Envíos (RIVA) — Backend PHP
 
-API REST transaccional construida con Slim.
+API REST transaccional desarrollada con PHP 8.4 y Slim Framework bajo los principios de Arquitectura Hexagonal (Puertos y Adaptadores).
 
-## Entorno Docker
+---
+
+## 1. Puesta en marcha desde un clon limpio
+
+Para levantar el proyecto completo desde cero con Docker:
 
 ```powershell
+# 1. Copiar el archivo de configuración
+cp .env.example .env
+
+# 2. Construir e iniciar los contenedores
 docker compose up --build
 ```
 
-La API quedará en `http://localhost:8081/health` y MySQL estará disponible para herramientas locales en `localhost:3307`.
+* **API REST:** `http://localhost:8081`
+* **Health Check:** `http://localhost:8081/health`
+* **Documentación Swagger UI:** `http://localhost:8081/docs/`
+* **Base de Datos MySQL:** disponible en `localhost:3307` (Base de datos: `riva`, Usuario: `riva`, Contraseña: `riva_password`).
 
-La documentación interactiva de los endpoints activos está disponible en `http://localhost:8081/docs/`.
+Al iniciar, Docker ejecuta automáticamente las migraciones con Phinx (`phinx migrate`) y el sembrado inicial (`InitialAdministratorSeeder`), creando el Administrador por defecto:
+* **Correo:** `admin@email.com`
+* **Contraseña inicial:** `Admin2026#Seguro`
 
-Al iniciar, la API ejecuta `phinx migrate`. Phinx registra las migraciones aplicadas en la tabla `phinxlog`, por lo que únicamente ejecuta las nuevas. Tras agregar una migración, vuelve a construir e iniciar:
+---
 
-```powershell
-docker compose up -d --build
-```
+## 2. Política de Contraseñas (OWASP / Rúbrica)
 
-El primer arranque crea un administrador de desarrollo con las variables `INITIAL_ADMIN_NOMBRES`, `INITIAL_ADMIN_CORREO` e `INITIAL_ADMIN_PASSWORD` de `.env`. La contraseña se hashea y el seeder no duplica al administrador en reinicios posteriores.
+La seguridad de contraseñas está centralizada en `src/Domain/User/PasswordPolicy.php`:
+* **Longitud:** Mínimo 8 y máximo 72 caracteres.
+* **Complejidad obligatoria:**
+  * Al menos una letra mayúscula (`[A-Z]`).
+  * Al menos un número (`[0-9]`).
+  * Al menos un carácter especial del conjunto estricto: `@ # $ % &`.
+* **Contraseñas temporales generadas:** Se generan con 12 caracteres cumpliendo estrictamente con la política y empleando únicamente símbolos del conjunto `@#$%&`.
 
-## Correo de credenciales
+---
 
-Al crear un usuario, su contraseña temporal se envía solamente a su correo y debe cambiarse en el primer inicio de sesión. Configura `MAIL_HOST=smtp.gmail.com`, `MAIL_PORT=587`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS` y `MAIL_FROM_NAME` en `.env`. Para Gmail, `MAIL_PASSWORD` debe ser una contraseña de aplicación de Google, no la contraseña normal de la cuenta.
+## 3. Autenticación y Control de Sesión con JWT
 
-Para detener los servicios conservando los datos:
+* **Manejo de tokens:** Firmados con HMAC-SHA256 (`HS256`) mediante `firebase/php-jwt`.
+* **Temporizador y Expiración:**
+  * **Configuración:** Variable `JWT_TTL_SECONDS=28800` (8 horas) en `.env`.
+  * **Inyección:** Leída en `public/index.php` e inyectada en `JwtTokenService`.
+  * **Aplicación:** `src/Infrastructure/Adapter/Out/Security/JwtTokenService.php` en el método `issue()`, calculando `'exp' => time() + $this->ttlSeconds`.
+* **Cómo probar la expiración en vivo para la demo (1 minuto):**
+  1. Cambiar en `.env` la variable: `JWT_TTL_SECONDS=60`
+  2. Aplicar el cambio: `docker compose up -d` (usa `up -d` para recargar variables).
+  3. Iniciar sesión para obtener un token nuevo.
+  4. Pasado 1 minuto, cualquier petición a un endpoint protegido responderá `401 Unauthorized` (`"Token expirado"`).
+  5. Restaurar `JWT_TTL_SECONDS=28800` al terminar la prueba.
 
-```powershell
-docker compose down
-```
+* **Revocación de Sesiones:**
+  * Si un usuario cambia su contraseña, se actualiza `password_changed_at` en UTC.
+  * Cualquier token emitido previamente (`iat < password_changed_at`) queda inmediatamente invalidado.
 
-## Autenticación (JWT)
+* **Cambio Obligatorio de Contraseña (Primer Inicio de Sesión):**
+  * Usuarios creados con contraseña temporal tienen `debe_cambiar_password = true`.
+  * El middleware `MustChangePasswordMiddleware` bloquea cualquier acceso operativo con `403 Forbidden` (`"Debes cambiar tu contraseña"`), permitiendo únicamente acceder a `/auth/me` y a `/auth/change-password`.
 
-### Variables de entorno
-El sistema requiere las siguientes variables de entorno configuradas en el archivo `.env`:
-- `JWT_SECRET`: Clave secreta para la firma criptográfica HMAC-SHA256 (mínimo 32 caracteres).
-- `JWT_ISSUER`: Identificador del emisor del token (ej. `gestion-envios-api`).
-- `JWT_TTL_SECONDS`: Tiempo de vida del token en segundos (por defecto `28800`, equivalente a 8 horas).
+---
 
-### Flujo de autenticación
-1. **Inicio de sesión:** El cliente realiza una solicitud `POST /api/v1/auth/login` con sus credenciales (`correo` y `password`).
-2. **Emisión del token:** La API verifica las credenciales y devuelve un token JWT con vigencia de 8 horas (`expires_at` en formato ISO 8601) junto con los datos del usuario autenticado.
-3. **Uso del token:** En solicitudes subsecuentes a endpoints protegidos, el cliente debe incluir la cabecera HTTP `Authorization: Bearer <token>`.
+## 4. Endpoints Disponibles (Épica 1)
 
-### Ejemplo con curl
+### Salud del Sistema
+* `GET /health` — Verificación de operatividad del servicio.
 
-Inicio de sesión para obtener el token:
-```bash
-curl -X POST http://localhost:8081/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"correo":"admin@email.com","password":"CAMBIA_ESTA_CLAVE_POR_UNA_SEGURA"}'
-```
+### Autenticación y Seguridad
+* `POST /api/v1/auth/login` — Iniciar sesión (responde 401 `"Credenciales incorrectas"` en fallos).
+* `GET /api/v1/auth/me` — Datos del usuario autenticado (incluye sede para Operadores).
+* `PATCH /api/v1/auth/change-password` — Cambio de contraseña (emite nuevo JWT).
+* `POST /api/v1/auth/password-reset/request` — Solicitud de recuperación por correo.
+* `POST /api/v1/auth/password-reset/confirm` — Restablecimiento de contraseña con token.
 
-Consulta del perfil del usuario autenticado con el token recibido:
-```bash
-curl -X GET http://localhost:8081/api/v1/auth/me \
-  -H "Authorization: Bearer <TOKEN_OBTENIDO>"
-```
+### Catálogos Maestros (Públicos)
+* `GET /api/v1/geography` — Departamentos, provincias, distritos y zonas tarifarias.
+* `GET /api/v1/sedes` — Centros de distribución operativos.
+* `GET /api/v1/vehicle-types` — Tipos de vehículo con pesos y dimensiones máximas.
+* `GET /api/v1/failure-reasons` — Catálogo estandarizado de motivos de fallo de entrega.
 
-Cambio de contraseña del usuario autenticado (requiere token JWT):
-```bash
-curl -X PATCH http://localhost:8081/api/v1/auth/change-password \
-  -H "Authorization: Bearer <TOKEN_OBTENIDO>" \
-  -H "Content-Type: application/json" \
-  -d '{"password_actual":"CAMBIA_ESTA_CLAVE_POR_UNA_SEGURA","password_nuevo":"NuevaClaveSegura2026!"}'
-```
-> La nueva contraseña debe cumplir con la política de seguridad: mínimo 12 caracteres (máx. 72), mayúscula, minúscula, número y carácter especial. Tras la actualización, `debe_cambiar_password` se actualiza a `false`.
-
-
-### Protección de rutas con Middlewares
-
-Para proteger una ruta y requerir autenticación JWT junto con validación de roles, se encadenan `JwtAuthMiddleware` y `RoleMiddleware`:
-
-```php
-$roleMiddleware = new RoleMiddleware('Admin');
-
-// En Slim, el último middleware añadido con ->add() se ejecuta primero.
-// Por tanto, se añade RoleMiddleware primero y JwtAuthMiddleware después:
-$app->get('/api/v1/ruta-protegida', $action)
-    ->add($roleMiddleware)
-    ->add($jwtAuthMiddleware);
-```
+### Gestión de Personal (Solo Administrador)
+* `POST /api/v1/users` — Alta de Conductor u Operador con contraseña temporal.
+* `GET /api/v1/users` — Listado de usuarios con filtros por rol y sede.
+* `PATCH /api/v1/users/{id}/status` — Activar o inhabilitar a un usuario.

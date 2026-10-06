@@ -28,6 +28,7 @@ use App\Infrastructure\Adapter\In\Http\Action\User\CreateUserAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\ListUsersAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\CorsMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
+use App\Infrastructure\Adapter\In\Http\Middleware\MustChangePasswordMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
 use App\Infrastructure\Adapter\Out\Notification\SmtpUserCredentialsMailer;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlCatalogRepository;
@@ -69,9 +70,10 @@ $loginAction = new LoginAction(
 $authenticateTokenService = new AuthenticateTokenService($tokenService, $userRepository, $catalogRepository);
 $jwtAuthMiddleware = new JwtAuthMiddleware($authenticateTokenService);
 $adminRoleMiddleware = new RoleMiddleware('ADMINISTRADOR', 'Admin');
+$mustChangePasswordMiddleware = new MustChangePasswordMiddleware();
 $meAction = new MeAction();
 $changePasswordAction = new ChangePasswordAction(
-    new ChangePasswordService($userRepository),
+    new ChangePasswordService($userRepository, $tokenService),
 );
 
 $mailer = new SmtpUserCredentialsMailer(
@@ -116,7 +118,7 @@ $registerAuthRoutes(
 );
 
 $registerUserRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php';
-$registerUserRoutes($app, $createUserAction, $listUsersAction, $changeUserStatusAction, $jwtAuthMiddleware, $adminRoleMiddleware);
+$registerUserRoutes($app, $createUserAction, $listUsersAction, $changeUserStatusAction, $jwtAuthMiddleware, $adminRoleMiddleware, $mustChangePasswordMiddleware);
 
 // Catalogos
 $getGeographyAction = new GetGeographyAction(new GetGeographyService($catalogRepository));
@@ -171,7 +173,7 @@ $customErrorHandler = function (
     } elseif ($exception instanceof HttpMethodNotAllowedException) {
         $statusCode = 405;
         $errorCode = 'metodo_no_permitido';
-        $message = 'Método no permitido';
+        $message = 'MÃ©todo no permitido';
     } elseif ($displayErrorDetails) {
         $message = $exception->getMessage();
     }

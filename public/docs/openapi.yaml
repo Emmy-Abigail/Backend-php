@@ -3,18 +3,28 @@ info:
   title: Sistema de Gestión de Envíos API
   version: 1.0.0
   description: |
-    Documentación de los endpoints disponibles actualmente.
+    Documentación de la API de RIVA - Sistema de Gestión de Envíos.
+    Arquitectura Hexagonal con PHP 8.4 y Slim Framework 4.
 
-    ## Próximos endpoints
+    ## Convenciones de Respuestas de Error
+    Todas las respuestas de error siguen el contrato uniforme:
+    ```json
+    {
+      "message": "Descripción legible del error",
+      "error": "codigo_error_en_snake_case"
+    }
+    ```
 
-    Las rutas marcadas como **Pendiente** ya están registradas, pero responden
-    `501 Endpoint aún no implementado` hasta que se complete su funcionalidad.
+    ## Rutas Pendientes
+    Las rutas marcadas como **Pendiente** responden con código `501 Endpoint aún no implementado`.
 servers:
   - url: /
     description: Servidor actual
 tags:
+  - name: Salud
   - name: Autenticación
   - name: Usuarios
+  - name: Catálogos
   - name: Paquetes (próximamente)
   - name: Lotes (próximamente)
   - name: Conductor (próximamente)
@@ -22,11 +32,32 @@ tags:
   - name: Seguimiento (próximamente)
   - name: Dashboard (próximamente)
   - name: Zonas (próximamente)
+
 paths:
+  /health:
+    get:
+      tags: [Salud]
+      summary: Verificación de estado del servidor (Health Check)
+      responses:
+        '200':
+          description: Servidor en línea y respondiendo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
   /api/v1/auth/login:
     post:
       tags: [Autenticación]
       summary: Iniciar sesión
+      description: |
+        Autentica al usuario con correo y contraseña.
+        Retorna el token JWT con expiración en zona horaria America/Lima (-05:00).
+        Para usuarios con rol OPERADOR se incluye el objeto sede {id, nombre}.
       requestBody:
         required: true
         content:
@@ -35,7 +66,7 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: Inicio de sesión correcto
+          description: Inicio de sesión exitoso
           content:
             application/json:
               schema:
@@ -46,26 +77,38 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '422':
           $ref: '#/components/responses/ValidationError'
+
   /api/v1/auth/me:
     get:
       tags: [Autenticación]
-      summary: Consultar el usuario autenticado
+      summary: Obtener perfil del usuario autenticado
+      description: Retorna la información del usuario del token JWT activo.
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Usuario autenticado
+          description: Perfil de usuario
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
+
   /api/v1/auth/change-password:
     patch:
       tags: [Autenticación]
-      summary: Cambiar la contraseña del usuario autenticado
-      description: La nueva contraseña requiere mínimo 12 caracteres, mayúscula, minúscula, número y símbolo.
+      summary: Cambiar contraseña
+      description: |
+        Permite al usuario cambiar su contraseña. 
+        Política de contraseña:
+        - Longitud entre 8 y 72 caracteres.
+        - Al menos una letra mayúscula.
+        - Al menos un número.
+        - Al menos un símbolo permitido (@, #, $, %, &).
+        
+        Al cambiarse la contraseña se actualiza password_changed_at en BD, 
+        se invalidan los tokens JWT anteriores y se devuelve un nuevo JWT activo.
       security:
         - bearerAuth: []
       requestBody:
@@ -76,22 +119,37 @@ paths:
               $ref: '#/components/schemas/ChangePasswordRequest'
       responses:
         '200':
-          description: Contraseña actualizada
+          description: Contraseña actualizada exitosamente con nuevo JWT emitido
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
+                $ref: '#/components/schemas/ChangePasswordResponse'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: Contraseña actual incorrecta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: La contraseña actual es incorrecta.
+                error: password_actual_incorrecta
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: Nueva contraseña no cumple la política
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: La nueva contraseña no cumple con los requisitos de seguridad.
+                error: password_invalida
+
   /api/v1/auth/password-reset/request:
     post:
-      tags: [AutenticaciÃ³n]
+      tags: [Autenticación]
       summary: Solicitar recuperación de contraseña
-      description: Si el correo corresponde a una cuenta activa, se envía un token de uso único. La respuesta no revela si el correo existe.
+      description: Genera un token de recuperación y lo envía por correo electrónico.
       requestBody:
         required: true
         content:
@@ -100,7 +158,7 @@ paths:
               $ref: '#/components/schemas/PasswordResetRequest'
       responses:
         '202':
-          description: Solicitud recibida
+          description: Solicitud recibida. Si el correo existe, se enviaron instrucciones.
           content:
             application/json:
               schema:
@@ -109,11 +167,12 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '422':
           $ref: '#/components/responses/ValidationError'
+
   /api/v1/auth/password-reset/confirm:
     post:
-      tags: [AutenticaciÃ³n]
-      summary: Restablecer contraseña con token
-      description: El token debe estar vigente, no haberse usado y la nueva contraseña debe cumplir la política de seguridad.
+      tags: [Autenticación]
+      summary: Confirmar restablecimiento de contraseña
+      description: Valida el token de recuperación y actualiza la contraseña del usuario.
       requestBody:
         required: true
         content:
@@ -122,25 +181,44 @@ paths:
               $ref: '#/components/schemas/PasswordResetConfirmRequest'
       responses:
         '200':
-          description: Contraseña restablecida
+          description: Contraseña restablecida exitosamente
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: Token inválido, expirado o ya utilizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: El token de recuperación es inválido o ha expirado.
+                error: token_invalido
         '422':
-          $ref: '#/components/responses/ValidationError'
+          description: La nueva contraseña no cumple los requisitos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: La contraseña no cumple los requisitos de seguridad.
+                error: password_invalida
+
   /api/v1/users:
     get:
       tags: [Usuarios]
-      summary: Listar el personal registrado
-      description: Requiere un JWT de un usuario con rol Admin.
+      summary: Listar personal registrado
+      description: |
+        Requiere rol ADMINISTRADOR.
+        Si el usuario tiene debe_cambiar_password = true, el acceso a este endpoint
+        es bloqueado por MustChangePasswordMiddleware con error 403.
+        Retorna la lista completa de usuarios incluyendo sede y tipo de vehículo.
       security:
         - bearerAuth: []
       responses:
         '200':
-          description: Personal registrado
+          description: Lista de personal
           content:
             application/json:
               schema:
@@ -148,11 +226,22 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: Rol insuficiente o cambio de contraseña obligatorio pendiente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: Debe cambiar su contraseña antes de continuar
+                error: cambio_password_requerido
+
     post:
       tags: [Usuarios]
-      summary: Crear un usuario
-      description: Requiere un JWT de un usuario con rol Admin. La contraseña temporal se envía únicamente al correo registrado.
+      summary: Crear usuario
+      description: |
+        Requiere rol ADMINISTRADOR.
+        Genera una contraseña temporal segura de 12 caracteres y la envía por correo electrónico.
+        Si el envío SMTP falla, el usuario se crea igualmente (retorna correo_enviado: false).
       security:
         - bearerAuth: []
       requestBody:
@@ -163,29 +252,193 @@ paths:
               $ref: '#/components/schemas/CreateUserRequest'
       responses:
         '201':
-          description: Usuario creado
+          description: Usuario creado exitosamente
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/CreateUserResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
         '409':
-          description: Ya existe un usuario con ese correo
+          description: Correo electrónico o DNI ya registrado
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
-        '502':
-          description: No fue posible enviar las credenciales y el usuario no fue creado.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MessageResponse'
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: Ya existe un usuario con ese correo electrónico.
+                error: correo_duplicado
         '422':
           $ref: '#/components/responses/ValidationError'
+
+  /api/v1/users/{id}/status:
+    patch:
+      tags: [Usuarios]
+      summary: Cambiar estado activo/inactivo de un usuario
+      description: |
+        Requiere rol ADMINISTRADOR.
+        Permite activar o desactivar una cuenta de usuario.
+        Reglas de seguridad:
+        - Un administrador NO puede desactivar su propia cuenta.
+        - NO se permite desactivar cuentas con rol ADMINISTRADOR.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID del usuario
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeUserStatusRequest'
+      responses:
+        '200':
+          description: Estado del usuario actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeUserStatusResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Intento de desactivar la propia cuenta o a otro administrador
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: No puedes desactivar tu propia cuenta de usuario.
+                error: no_se_puede_desactivar_a_si_mismo
+        '404':
+          description: Usuario no encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: Usuario no encontrado.
+                error: usuario_no_encontrado
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/v1/geography:
+    get:
+      tags: [Catálogos]
+      summary: Obtener catálogo de geografía (Departamentos, Provincias y Distritos)
+      responses:
+        '200':
+          description: Estructura geográfica
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  departamentos:
+                    type: array
+                    items:
+                      type: object
+
+  /api/v1/sedes:
+    get:
+      tags: [Catálogos]
+      summary: Listar sedes operativas activas
+      responses:
+        '200':
+          description: Lista de sedes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        nombre:
+                          type: string
+                        direccion:
+                          type: string
+                        departamento:
+                          type: string
+                        provincia:
+                          type: string
+                        distrito:
+                          type: string
+                        ubigeo:
+                          type: string
+                        latitud:
+                          type: number
+                        longitud:
+                          type: number
+                        activo:
+                          type: boolean
+
+  /api/v1/vehicle-types:
+    get:
+      tags: [Catálogos]
+      summary: Listar tipos de vehículos
+      responses:
+        '200':
+          description: Lista de tipos de vehículos con capacidades
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        nombre:
+                          type: string
+                        capacidad_peso_kg:
+                          type: number
+                        capacidad_volumen_m3:
+                          type: number
+                        activo:
+                          type: boolean
+
+  /api/v1/failure-reasons:
+    get:
+      tags: [Catálogos]
+      summary: Listar motivos de fallos de entrega
+      responses:
+        '200':
+          description: Lista de motivos de fallo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        codigo:
+                          type: string
+                        descripcion:
+                          type: string
+
   /api/v1/packages:
     get:
       tags: [Paquetes (próximamente)]
@@ -199,24 +452,27 @@ paths:
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
+
   /api/v1/packages/{id}:
     get:
       tags: [Paquetes (próximamente)]
-      summary: '[Pendiente] Consultar un paquete'
+      summary: '[Pendiente] Consultar paquete por ID'
       parameters:
         - $ref: '#/components/parameters/PackageId'
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
+
   /api/v1/packages/{id}/history:
     get:
       tags: [Paquetes (próximamente)]
-      summary: '[Pendiente] Consultar historial de un paquete'
+      summary: '[Pendiente] Historial del paquete'
       parameters:
         - $ref: '#/components/parameters/PackageId'
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
+
   /api/v1/batches:
     get:
       tags: [Lotes (próximamente)]
@@ -230,15 +486,17 @@ paths:
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
+
   /api/v1/batches/{id}:
     get:
       tags: [Lotes (próximamente)]
-      summary: '[Pendiente] Consultar un lote'
+      summary: '[Pendiente] Consultar lote'
       parameters:
         - $ref: '#/components/parameters/BatchId'
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
+
   /api/v1/batches/{id}/assignment:
     patch:
       tags: [Lotes (próximamente)]
@@ -248,6 +506,7 @@ paths:
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
+
   /api/v1/me/batches:
     get:
       tags: [Conductor (próximamente)]
@@ -255,6 +514,7 @@ paths:
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
+
   /api/v1/me/packages:
     get:
       tags: [Conductor (próximamente)]
@@ -262,6 +522,7 @@ paths:
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
+
   /api/v1/batches/{id}/start-route:
     post:
       tags: [Conductor (próximamente)]
@@ -271,6 +532,7 @@ paths:
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
+
   /api/v1/packages/{id}/deliver:
     post:
       tags: [Entregas (próximamente)]
@@ -280,6 +542,7 @@ paths:
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
+
   /api/v1/packages/{id}/fail:
     post:
       tags: [Entregas (próximamente)]
@@ -289,6 +552,7 @@ paths:
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
+
   /api/v1/tracking/{trackingId}:
     get:
       tags: [Seguimiento (próximamente)]
@@ -298,6 +562,7 @@ paths:
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
+
   /api/v1/dashboard/metrics:
     get:
       tags: [Dashboard (próximamente)]
@@ -305,6 +570,7 @@ paths:
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
+
   /api/v1/zones:
     get:
       tags: [Zonas (próximamente)]
@@ -318,12 +584,14 @@ paths:
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
+
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+
   parameters:
     PackageId:
       name: id
@@ -346,6 +614,7 @@ components:
       schema:
         type: string
       description: Código de seguimiento
+
   responses:
     NotImplemented:
       description: Endpoint registrado, pero su funcionalidad aún no está implementada
@@ -360,25 +629,38 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/MessageResponse'
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: Solicitud inválida.
+            error: solicitud_invalida
     Unauthorized:
       description: Token inválido, ausente o credenciales incorrectas
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/MessageResponse'
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: Credenciales incorrectas
+            error: credenciales_incorrectas
     Forbidden:
-      description: El usuario no tiene el rol requerido
+      description: Acceso no autorizado o acción no permitida
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/MessageResponse'
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: Acceso no autorizado
+            error: acceso_no_autorizado
     ValidationError:
-      description: Datos de entrada inválidos
+      description: Datos de entrada con formato inválido
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/MessageResponse'
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            message: Los datos enviados no son válidos.
+            error: validacion_fallida
+
   schemas:
     LoginRequest:
       type: object
@@ -387,26 +669,29 @@ components:
         correo:
           type: string
           format: email
-          example: conductor@ejemplo.com
+          example: operador@ejemplo.com
         password:
           type: string
           format: password
-          example: ClaveTemporal2026!
+          example: ClaveTemporal2026@
+
     LoginResponse:
       type: object
       required: [token, token_type, expires_at, user]
       properties:
         token:
           type: string
-          description: JWT que debe enviarse como Bearer Token.
+          description: JWT emitido para autenticación.
         token_type:
           type: string
           example: Bearer
         expires_at:
           type: string
           format: date-time
+          example: "2026-10-06T12:00:00-05:00"
         user:
           $ref: '#/components/schemas/User'
+
     ChangePasswordRequest:
       type: object
       required: [password_actual, password_nuevo]
@@ -414,10 +699,32 @@ components:
         password_actual:
           type: string
           format: password
+          example: ClaveTemporal2026@
         password_nuevo:
           type: string
           format: password
-          example: NuevaClaveSegura2026!
+          example: NuevaClaveSegura2026#
+
+    ChangePasswordResponse:
+      type: object
+      required: [message, token, token_type, expires_at, user]
+      properties:
+        message:
+          type: string
+          example: Contraseña actualizada exitosamente
+        token:
+          type: string
+          description: Nuevo JWT emitido para reemplazar el anterior.
+        token_type:
+          type: string
+          example: Bearer
+        expires_at:
+          type: string
+          format: date-time
+          example: "2026-10-06T12:00:00-05:00"
+        user:
+          $ref: '#/components/schemas/User'
+
     PasswordResetRequest:
       type: object
       required: [correo]
@@ -427,19 +734,21 @@ components:
           format: email
           maxLength: 150
           example: ana.perez@ejemplo.com
+
     PasswordResetConfirmRequest:
       type: object
       required: [token, password_nuevo]
       properties:
         token:
           type: string
-          description: Token hexadecimal de 64 caracteres enviado por correo.
+          description: Token hexadecimal de 64 caracteres recibido por correo.
         password_nuevo:
           type: string
           format: password
-          minLength: 12
+          minLength: 8
           maxLength: 72
-          example: NuevaClaveSegura2026!
+          example: NuevaClaveSegura2026#
+
     CreateUserRequest:
       type: object
       required: [nombres, correo, rol]
@@ -447,36 +756,76 @@ components:
         nombres:
           type: string
           maxLength: 150
-          example: Ana Pérez
+          example: Carlos Mendoza
         correo:
           type: string
           format: email
           maxLength: 150
-          example: ana.perez@ejemplo.com
+          example: carlos.mendoza@ejemplo.com
+        rol:
+          type: string
+          enum: [ADMINISTRADOR, OPERADOR, CONDUCTOR]
+          example: OPERADOR
+        dni:
+          type: string
+          maxLength: 8
+          nullable: true
+          example: '12345678'
         telefono:
           type: string
           maxLength: 20
           nullable: true
-          example: '+51999999999'
-        rol:
-          type: string
-          enum: [Admin, Conductor]
-          example: Conductor
+          example: '+51987654321'
+        id_sede:
+          type: integer
+          nullable: true
+          example: 1
+        id_tipo_vehiculo:
+          type: integer
+          nullable: true
+          example: 1
+
     CreateUserResponse:
       type: object
-      required: [id, nombres, correo, rol]
+      required: [id, nombres, correo, rol, correo_enviado]
       properties:
         id:
           type: integer
-          example: 2
+          example: 5
         nombres:
           type: string
+          example: Carlos Mendoza
         correo:
           type: string
           format: email
+          example: carlos.mendoza@ejemplo.com
         rol:
           type: string
-          enum: [Admin, Conductor]
+          enum: [ADMINISTRADOR, OPERADOR, CONDUCTOR]
+          example: OPERADOR
+        correo_enviado:
+          type: boolean
+          description: Indica si el correo con las credenciales temporales fue entregado exitosamente.
+          example: true
+
+    ChangeUserStatusRequest:
+      type: object
+      required: [activo]
+      properties:
+        activo:
+          type: boolean
+          example: false
+
+    ChangeUserStatusResponse:
+      type: object
+      required: [message, user]
+      properties:
+        message:
+          type: string
+          example: Usuario desactivado exitosamente.
+        user:
+          $ref: '#/components/schemas/User'
+
     User:
       type: object
       required: [id, nombres, correo, rol]
@@ -486,33 +835,65 @@ components:
           example: 1
         nombres:
           type: string
-          example: Administrador Inicial
+          example: Administrador Principal
         correo:
           type: string
           format: email
           example: admin@ejemplo.com
         rol:
           type: string
-          example: Admin
+          enum: [ADMINISTRADOR, OPERADOR, CONDUCTOR]
+          example: ADMINISTRADOR
+        dni:
+          type: string
+          nullable: true
+          example: '12345678'
+        telefono:
+          type: string
+          nullable: true
+          example: '+51999999999'
+        id_sede:
+          type: integer
+          nullable: true
+          example: 1
+        sede_nombre:
+          type: string
+          nullable: true
+          example: Sede Central Lima
+        id_tipo_vehiculo:
+          type: integer
+          nullable: true
+          example: null
+        tipo_vehiculo:
+          type: string
+          nullable: true
+          example: null
+        activo:
+          type: boolean
+          example: true
+        debe_cambiar_password:
+          type: boolean
+          example: false
+        sede:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            nombre:
+              type: string
+
     UserResponse:
       type: object
       required: [user]
       properties:
         user:
           $ref: '#/components/schemas/User'
+
     UserListItem:
       allOf:
         - $ref: '#/components/schemas/User'
-        - type: object
-          required: [telefono, activo]
-          properties:
-            telefono:
-              type: string
-              nullable: true
-              example: '+51999999999'
-            activo:
-              type: boolean
-              example: true
+
     UserListResponse:
       type: object
       required: [data]
@@ -521,9 +902,22 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/UserListItem'
+
     MessageResponse:
       type: object
       required: [message]
       properties:
         message:
           type: string
+          example: Operación realizada exitosamente
+
+    ErrorResponse:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+          example: Mensaje descriptivo del error
+        error:
+          type: string
+          example: codigo_error

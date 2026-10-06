@@ -13,6 +13,7 @@ use App\Application\Port\Out\Persistence\PasswordResetTokenRepository;
 use App\Application\Port\Out\Persistence\UserRepository;
 use App\Domain\User\PasswordPolicy;
 use DateTimeImmutable;
+use Illuminate\Database\Capsule\Manager as Capsule;
 use RuntimeException;
 
 final readonly class ConfirmPasswordResetService implements ConfirmPasswordResetUseCase
@@ -28,14 +29,14 @@ final readonly class ConfirmPasswordResetService implements ConfirmPasswordReset
         $now = new DateTimeImmutable();
         $resetToken = $this->passwordResetTokenRepository->findUsableByHash(hash('sha256', $command->token), $now);
         if ($resetToken === null) {
-            throw new InvalidPasswordResetToken();
+            throw new InvalidPasswordResetToken('El enlace no es válido o expiró');
         }
 
         $user = $this->userRepository->findById($resetToken->userId);
         if ($user === null || !$user->active) {
             $this->passwordResetTokenRepository->markAsUsed($resetToken->id, $now);
 
-            throw new InvalidPasswordResetToken();
+            throw new InvalidPasswordResetToken('El enlace no es válido o expiró');
         }
 
         if (!PasswordPolicy::isValid($command->newPassword)) {
@@ -51,7 +52,9 @@ final readonly class ConfirmPasswordResetService implements ConfirmPasswordReset
             throw new RuntimeException('No fue posible generar el hash de la contraseña');
         }
 
-        $this->userRepository->updatePassword($user->id, $passwordHash, false);
-        $this->passwordResetTokenRepository->markAsUsed($resetToken->id, $now);
+        Capsule::transaction(function () use ($user, $passwordHash, $resetToken, $now): void {
+            $this->userRepository->updatePassword($user->id, $passwordHash, false);
+            $this->passwordResetTokenRepository->markAsUsed($resetToken->id, $now);
+        });
     }
 }
