@@ -15,12 +15,22 @@ final readonly class MeAction
         /** @var AuthenticatedUser $authUser */
         $authUser = $request->getAttribute('authUser');
 
+        $sede = null;
+        if ($authUser->role === 'OPERADOR' && $authUser->idSede !== null) {
+            $sede = [
+                'id' => $authUser->idSede,
+                'nombre' => $authUser->sedeNombre ?? 'Sede Asignada',
+            ];
+        }
+
         return $this->json($response, [
             'user' => [
                 'id' => $authUser->id,
                 'nombres' => $authUser->names,
                 'correo' => $authUser->email,
                 'rol' => $authUser->role,
+                'debe_cambiar_password' => $authUser->mustChangePassword,
+                'sede' => $sede,
             ],
         ]);
     }
