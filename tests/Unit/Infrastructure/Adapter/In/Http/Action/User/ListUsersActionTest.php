@@ -20,7 +20,19 @@ final class ListUsersActionTest extends TestCase
     {
         $useCase = $this->createStub(ListUsersUseCase::class);
         $useCase->method('execute')->willReturn(new ListUsersResult([
-            new UserListItem(2, 'Conductor', 'conductor@email.com', '999888777', 'Conductor', true),
+            new UserListItem(
+                2,
+                'Conductor',
+                'conductor@email.com',
+                '12345678',
+                '999888777',
+                'CONDUCTOR',
+                true,
+                null,
+                1,
+                null,
+                'Furgoneta',
+            ),
         ]));
 
         $response = (new ListUsersAction($useCase))(
@@ -34,8 +46,13 @@ final class ListUsersActionTest extends TestCase
                 'id' => 2,
                 'nombres' => 'Conductor',
                 'correo' => 'conductor@email.com',
+                'dni' => '12345678',
                 'telefono' => '999888777',
-                'rol' => 'Conductor',
+                'rol' => 'CONDUCTOR',
+                'id_sede' => null,
+                'id_tipo_vehiculo' => 1,
+                'sede_nombre' => null,
+                'tipo_vehiculo' => 'Furgoneta',
                 'activo' => true,
             ]],
         ], json_decode((string) $response->getBody(), true));

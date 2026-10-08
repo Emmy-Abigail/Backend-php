@@ -43,6 +43,7 @@ final readonly class JwtTokenService implements TokenService
             'correo' => $user->email,
             'nombre' => $user->names,
             'rol' => $user->role,
+            'sede' => $user->idSede,
             'iat' => $now,
             'exp' => $expiresTimestamp,
             'jti' => bin2hex(random_bytes(8)),
@@ -78,9 +79,14 @@ final readonly class JwtTokenService implements TokenService
             throw new InvalidToken();
         }
 
+        $sedeId = isset($decodedArray['sede']) && is_numeric($decodedArray['sede']) ? (int) $decodedArray['sede'] : null;
+        $issuedAt = isset($decodedArray['iat']) && is_numeric($decodedArray['iat']) ? (int) $decodedArray['iat'] : null;
+
         return new TokenClaims(
             (int) $decodedArray['sub'],
             (string) $decodedArray['rol'],
+            $sedeId,
+            $issuedAt,
         );
     }
 }

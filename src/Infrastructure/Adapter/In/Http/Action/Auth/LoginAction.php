@@ -7,6 +7,7 @@ namespace App\Infrastructure\Adapter\In\Http\Action\Auth;
 use App\Application\Exception\InvalidCredentials;
 use App\Application\Port\In\Auth\LoginCommand;
 use App\Application\Port\In\Auth\LoginUseCase;
+use DateTimeZone;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -21,43 +22,66 @@ final readonly class LoginAction
         $body = $request->getParsedBody();
 
         if (!is_array($body)) {
-            return $this->json($response, ['message' => 'El cuerpo debe ser un objeto JSON válido'], 400);
+            return $this->json($response, [
+                'message' => 'El cuerpo debe ser un objeto JSON válido',
+                'error' => 'cuerpo_invalido',
+            ], 400);
         }
 
         $email = $body['correo'] ?? null;
         $password = $body['password'] ?? null;
 
         if (!is_string($email) || !is_string($password)) {
-            return $this->json($response, ['message' => 'Los campos correo y password son obligatorios'], 400);
+            return $this->invalidCredentialsResponse($response);
         }
 
         $email = strtolower(trim($email));
 
         if ($email === '' || strlen($email) > 150 || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
-            return $this->json($response, ['message' => 'El correo no tiene un formato válido'], 422);
+            return $this->invalidCredentialsResponse($response);
         }
 
         if ($password === '' || strlen($password) > 72) {
-            return $this->json($response, ['message' => 'La contraseña debe tener entre 1 y 72 caracteres'], 422);
+            return $this->invalidCredentialsResponse($response);
         }
 
         try {
             $result = $this->loginUseCase->execute(new LoginCommand($email, $password));
         } catch (InvalidCredentials) {
-            return $this->json($response, ['message' => 'Credenciales inválidas'], 401);
+            return $this->invalidCredentialsResponse($response);
         }
+
+        $sede = null;
+        if ($result->role === 'OPERADOR' && $result->idSede !== null) {
+            $sede = [
+                'id' => $result->idSede,
+                'nombre' => $result->sedeNombre ?? 'Sede Asignada',
+            ];
+        }
+
+        $expiresAtLima = $result->expiresAt->setTimezone(new DateTimeZone('America/Lima'));
 
         return $this->json($response, [
             'token' => $result->token,
             'token_type' => $result->tokenType,
-            'expires_at' => $result->expiresAt->format(DATE_ATOM),
+            'expires_at' => $expiresAtLima->format('Y-m-d\TH:i:sP'),
             'user' => [
                 'id' => $result->id,
                 'nombres' => $result->names,
                 'correo' => $result->email,
                 'rol' => $result->role,
+                'debe_cambiar_password' => $result->mustChangePassword,
+                'sede' => $sede,
             ],
         ]);
+    }
+
+    private function invalidCredentialsResponse(ResponseInterface $response): ResponseInterface
+    {
+        return $this->json($response, [
+            'message' => 'Credenciales incorrectas',
+            'error' => 'credenciales_incorrectas',
+        ], 401);
     }
 
     /**

@@ -6,5 +6,5 @@ namespace App\Application\Port\In\Auth;
 
 interface ChangePasswordUseCase
 {
-    public function execute(ChangePasswordCommand $command): void;
+    public function execute(ChangePasswordCommand $command): ChangePasswordResult;
 }

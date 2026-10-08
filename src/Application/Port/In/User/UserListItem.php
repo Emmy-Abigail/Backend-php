@@ -10,9 +10,14 @@ final readonly class UserListItem
         public int $id,
         public string $names,
         public string $email,
+        public string $dni,
         public ?string $phone,
         public string $role,
         public bool $active,
+        public ?int $idSede = null,
+        public ?int $idTipoVehiculo = null,
+        public ?string $sedeNombre = null,
+        public ?string $tipoVehiculo = null,
     ) {
     }
 }
