@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\User;
 
+use DateTimeImmutable;
+
 final readonly class User
 {
     public function __construct(
@@ -18,6 +20,7 @@ final readonly class User
         public string $dni = '',
         public ?int $idSede = null,
         public ?int $idTipoVehiculo = null,
+        public ?DateTimeImmutable $passwordChangedAt = null,
     ) {
     }
 

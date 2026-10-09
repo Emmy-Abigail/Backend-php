@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Unit\Infrastructure\Adapter\In\Http\Action\User;
 
 use App\Application\Exception\EmailAlreadyExists;
-use App\Application\Exception\EmailDeliveryFailed;
 use App\Application\Port\In\User\CreateUserCommand;
 use App\Application\Port\In\User\CreateUserResult;
 use App\Application\Port\In\User\CreateUserUseCase;
@@ -32,28 +31,36 @@ final class CreateUserActionTest extends TestCase
     }
 
     #[Test]
-    public function crea_usuario_y_normaliza_nombre_telefono_y_correo(): void
+    public function crea_usuario_conductor_con_datos_validos(): void
     {
         $useCase = $this->createMock(CreateUserUseCase::class);
         $useCase->expects($this->once())
             ->method('execute')
             ->with($this->callback(static fn (CreateUserCommand $command): bool => $command->names === 'Juan Pérez'
+                && $command->dni === '12345678'
                 && $command->email === 'juan@email.com'
-                && $command->phone === '999888777'))
-            ->willReturn(new CreateUserResult(2, 'Juan Pérez', 'juan@email.com', 'Conductor'));
+                && $command->phone === '999888777'
+                && $command->role === 'CONDUCTOR'
+                && $command->idTipoVehiculo === 1))
+            ->willReturn(new CreateUserResult(2, 'Juan Pérez', '12345678', 'juan@email.com', '999888777', 'CONDUCTOR', null, 1, 'ClaveTemp123@', true));
 
         $response = (new CreateUserAction($useCase))(
             $this->request([
                 'nombres' => '  Juan Pérez  ',
+                'dni' => '12345678',
                 'correo' => ' JUAN@EMAIL.COM ',
                 'telefono' => ' 999888777 ',
-                'rol' => 'Conductor',
+                'rol' => 'CONDUCTOR',
+                'id_tipo_vehiculo' => 1,
             ]),
             $this->response(),
         );
 
         self::assertSame(201, $response->getStatusCode());
-        self::assertArrayNotHasKey('password_temporal', json_decode((string) $response->getBody(), true));
+        $body = json_decode((string) $response->getBody(), true);
+        self::assertSame('Juan Pérez', $body['nombres']);
+        self::assertSame('12345678', $body['dni']);
+        self::assertTrue($body['correo_enviado']);
     }
 
     #[Test]
@@ -65,16 +72,20 @@ final class CreateUserActionTest extends TestCase
 
         $nameResponse = $action($this->request([
             'nombres' => str_repeat('a', 151),
+            'dni' => '12345678',
             'correo' => 'usuario@email.com',
-            'rol' => 'Conductor',
+            'rol' => 'CONDUCTOR',
+            'id_tipo_vehiculo' => 1,
         ]), $this->response());
         self::assertSame(422, $nameResponse->getStatusCode());
 
         $phoneResponse = $action($this->request([
             'nombres' => 'Usuario',
+            'dni' => '12345678',
             'correo' => 'usuario@email.com',
             'telefono' => str_repeat('1', 21),
-            'rol' => 'Conductor',
+            'rol' => 'CONDUCTOR',
+            'id_tipo_vehiculo' => 1,
         ]), $this->response());
         self::assertSame(422, $phoneResponse->getStatusCode());
     }
@@ -88,31 +99,14 @@ final class CreateUserActionTest extends TestCase
         $response = (new CreateUserAction($useCase))(
             $this->request([
                 'nombres' => 'Usuario',
+                'dni' => '12345678',
                 'correo' => 'usuario@email.com',
-                'rol' => 'Conductor',
+                'rol' => 'CONDUCTOR',
+                'id_tipo_vehiculo' => 1,
             ]),
             $this->response(),
         );
 
         self::assertSame(409, $response->getStatusCode());
     }
-
-    #[Test]
-    public function informa_cuando_no_se_pudieron_enviar_las_credenciales(): void
-    {
-        $useCase = $this->createStub(CreateUserUseCase::class);
-        $useCase->method('execute')->willThrowException(new EmailDeliveryFailed());
-
-        $response = (new CreateUserAction($useCase))(
-            $this->request([
-                'nombres' => 'Usuario',
-                'correo' => 'usuario@email.com',
-                'rol' => 'Conductor',
-            ]),
-            $this->response(),
-        );
-
-        self::assertSame(502, $response->getStatusCode());
-    }
-
 }

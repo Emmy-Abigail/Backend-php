@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Application\Service\User;
 
+use App\Application\Exception\CannotDeactivateAdministrator;
+use App\Application\Exception\CannotDeactivateSelf;
 use App\Application\Exception\UserNotFound;
 use App\Application\Port\In\User\ChangeUserStatusCommand;
 use App\Application\Port\In\User\ChangeUserStatusUseCase;
@@ -21,6 +23,16 @@ final readonly class ChangeUserStatusService implements ChangeUserStatusUseCase
 
         if ($user === null) {
             throw new UserNotFound();
+        }
+
+        if (!$command->active) {
+            if ($command->authenticatedUserId !== null && $command->authenticatedUserId === $command->userId) {
+                throw new CannotDeactivateSelf('No puedes inhabilitarte a ti mismo');
+            }
+
+            if ($user->role === 'ADMINISTRADOR' || $user->role === 'Admin') {
+                throw new CannotDeactivateAdministrator('No puedes inhabilitar a un administrador');
+            }
         }
 
         $this->userRepository->updateStatus($command->userId, $command->active);

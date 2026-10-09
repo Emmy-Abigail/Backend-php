@@ -26,20 +26,33 @@ use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetVehicleTypesAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\ChangeUserStatusAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\CreateUserAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\ListUsersAction;
+use App\Infrastructure\Adapter\In\Http\Middleware\CorsMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
+use App\Infrastructure\Adapter\In\Http\Middleware\MustChangePasswordMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
 use App\Infrastructure\Adapter\Out\Notification\SmtpUserCredentialsMailer;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlCatalogRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPasswordResetTokenRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlUserRepository;
 use App\Infrastructure\Adapter\Out\Security\JwtTokenService;
+use Psr\Http\Message\ResponseInterface;
+use Psr\Http\Message\ServerRequestInterface;
+use Slim\Exception\HttpMethodNotAllowedException;
+use Slim\Exception\HttpNotFoundException;
 use Slim\Factory\AppFactory;
 
 require_once __DIR__ . '/../vendor/autoload.php';
 require_once __DIR__ . '/../config/bootstrap.php';
 
 $app = AppFactory::create();
+$app->addRoutingMiddleware();
 $app->addBodyParsingMiddleware();
+
+// Endpoint de verificacion de salud (Health Check)
+$app->get('/health', function (ServerRequestInterface $request, ResponseInterface $response): ResponseInterface {
+    $response->getBody()->write((string) json_encode(['status' => 'ok']));
+    return $response->withHeader('Content-Type', 'application/json');
+});
 
 $userRepository = new MySqlUserRepository();
 $passwordResetTokenRepository = new MySqlPasswordResetTokenRepository();
@@ -51,15 +64,16 @@ $tokenService = new JwtTokenService(
 );
 
 $loginAction = new LoginAction(
-    new LoginService($userRepository, $tokenService),
+    new LoginService($userRepository, $tokenService, $catalogRepository),
 );
 
-$authenticateTokenService = new AuthenticateTokenService($tokenService, $userRepository);
+$authenticateTokenService = new AuthenticateTokenService($tokenService, $userRepository, $catalogRepository);
 $jwtAuthMiddleware = new JwtAuthMiddleware($authenticateTokenService);
 $adminRoleMiddleware = new RoleMiddleware('ADMINISTRADOR', 'Admin');
+$mustChangePasswordMiddleware = new MustChangePasswordMiddleware();
 $meAction = new MeAction();
 $changePasswordAction = new ChangePasswordAction(
-    new ChangePasswordService($userRepository),
+    new ChangePasswordService($userRepository, $tokenService),
 );
 
 $mailer = new SmtpUserCredentialsMailer(
@@ -104,9 +118,9 @@ $registerAuthRoutes(
 );
 
 $registerUserRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php';
-$registerUserRoutes($app, $createUserAction, $listUsersAction, $changeUserStatusAction, $jwtAuthMiddleware, $adminRoleMiddleware);
+$registerUserRoutes($app, $createUserAction, $listUsersAction, $changeUserStatusAction, $jwtAuthMiddleware, $adminRoleMiddleware, $mustChangePasswordMiddleware);
 
-// Catálogos
+// Catalogos
 $getGeographyAction = new GetGeographyAction(new GetGeographyService($catalogRepository));
 $getSedesAction = new GetSedesAction(new GetSedesService($catalogRepository));
 $getVehicleTypesAction = new GetVehicleTypesAction(new GetVehicleTypesService($catalogRepository));
@@ -135,5 +149,48 @@ foreach ($routeFiles as $routeFile) {
     $registerRoutes = require $routeFile;
     $registerRoutes($app);
 }
+
+// Manejador global de errores (JSON renderer para 404, 405 y 500)
+$isDevelopment = ($_ENV['APP_ENV'] ?? 'production') === 'development';
+$errorMiddleware = $app->addErrorMiddleware($isDevelopment, true, true);
+$customErrorHandler = function (
+    ServerRequestInterface $request,
+    Throwable $exception,
+    bool $displayErrorDetails,
+    bool $logErrors,
+    bool $logErrorDetails
+) use ($app, $isDevelopment): ResponseInterface {
+    $response = $app->getResponseFactory()->createResponse();
+
+    $statusCode = 500;
+    $errorCode = 'error_interno';
+    $message = 'Error interno del servidor';
+
+    if ($exception instanceof HttpNotFoundException) {
+        $statusCode = 404;
+        $errorCode = 'no_encontrado';
+        $message = 'Ruta no encontrada';
+    } elseif ($exception instanceof HttpMethodNotAllowedException) {
+        $statusCode = 405;
+        $errorCode = 'metodo_no_permitido';
+        $message = 'MÃ©todo no permitido';
+    } elseif ($displayErrorDetails) {
+        $message = $exception->getMessage();
+    }
+
+    $payload = [
+        'message' => $message,
+        'error' => $errorCode,
+    ];
+
+    $response->getBody()->write((string) json_encode($payload, JSON_UNESCAPED_UNICODE));
+    return $response
+        ->withStatus($statusCode)
+        ->withHeader('Content-Type', 'application/json');
+};
+$errorMiddleware->setDefaultErrorHandler($customErrorHandler);
+
+// CORS como el middleware mas externo
+$app->add(new CorsMiddleware($_ENV['FRONTEND_URL'] ?? 'http://localhost:4200'));
 
 $app->run();

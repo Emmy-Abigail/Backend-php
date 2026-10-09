@@ -9,6 +9,7 @@ final readonly class ChangeUserStatusCommand
     public function __construct(
         public int $userId,
         public bool $active,
+        public ?int $authenticatedUserId = null,
     ) {
     }
 }

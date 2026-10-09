@@ -93,6 +93,8 @@ final readonly class SmtpUserCredentialsMailer implements UserCredentialsMailer,
         $mailer->Password = $this->password;
         $mailer->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
         $mailer->CharSet = PHPMailer::CHARSET_UTF8;
+        $mailer->Timeout = 10;
+        $mailer->SMTPKeepAlive = false;
         $mailer->setFrom($this->fromAddress, $this->fromName);
 
         return $mailer;

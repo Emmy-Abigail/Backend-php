@@ -11,6 +11,9 @@ final readonly class AuthenticatedUser
         public string $names,
         public string $email,
         public string $role,
+        public bool $mustChangePassword = false,
+        public ?int $idSede = null,
+        public ?string $sedeNombre = null,
     ) {
     }
 }

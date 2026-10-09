@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Application\Service\Auth;
 
-use App\Application\Exception\EmailDeliveryFailed;
 use App\Application\Port\In\Auth\RequestPasswordResetCommand;
 use App\Application\Port\In\Auth\RequestPasswordResetUseCase;
 use App\Application\Port\Out\Notification\PasswordResetMailer;
@@ -13,6 +12,7 @@ use App\Application\Port\Out\Persistence\UserRepository;
 use DateInterval;
 use DateTimeImmutable;
 use InvalidArgumentException;
+use Throwable;
 
 final readonly class RequestPasswordResetService implements RequestPasswordResetUseCase
 {
@@ -45,10 +45,9 @@ final readonly class RequestPasswordResetService implements RequestPasswordReset
 
         try {
             $this->passwordResetMailer->sendPasswordReset($user->names, $user->email, $token);
-        } catch (EmailDeliveryFailed $exception) {
+        } catch (Throwable $exception) {
             $this->passwordResetTokenRepository->markAsUsed($record->id, $now);
-
-            throw $exception;
+            error_log('Error al enviar correo de recuperación de contraseña: ' . $exception->getMessage());
         }
     }
 }

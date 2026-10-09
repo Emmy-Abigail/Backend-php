@@ -19,14 +19,14 @@ class ConfirmPasswordResetServiceTest extends TestCase
     public function test_actualiza_la_contrasena_e_inutiliza_un_token_valido(): void
     {
         $plainToken = str_repeat('a', 64);
-        $user = new User(1, 'Ana Pérez', 'ana@test.com', password_hash('ClaveAnterior2026!', PASSWORD_DEFAULT), 'OPERADOR', true);
+        $user = new User(1, 'Ana PÃ©rez', 'ana@test.com', password_hash('ClaveAnterior2026!', PASSWORD_DEFAULT), 'OPERADOR', true);
         $resetToken = new PasswordResetToken(7, 1, new DateTimeImmutable('+30 minutes'), null);
 
         $userRepository = $this->createMock(UserRepository::class);
         $userRepository->expects($this->once())->method('findById')->with(1)->willReturn($user);
         $userRepository->expects($this->once())
             ->method('updatePassword')
-            ->with(1, $this->callback(static fn (string $hash): bool => password_verify('NuevaClave2026!', $hash)), false);
+            ->with(1, $this->callback(static fn (string $hash): bool => password_verify('NuevaClave2026#', $hash)), false);
 
         $tokenRepository = $this->createMock(PasswordResetTokenRepository::class);
         $tokenRepository->expects($this->once())
@@ -38,7 +38,7 @@ class ConfirmPasswordResetServiceTest extends TestCase
             ->with(7, $this->isInstanceOf(DateTimeImmutable::class));
 
         (new ConfirmPasswordResetService($userRepository, $tokenRepository))
-            ->execute(new ConfirmPasswordResetCommand($plainToken, 'NuevaClave2026!'));
+            ->execute(new ConfirmPasswordResetCommand($plainToken, 'NuevaClave2026#'));
     }
 
     #[Test]
@@ -51,7 +51,7 @@ class ConfirmPasswordResetServiceTest extends TestCase
 
         $this->expectException(InvalidPasswordResetToken::class);
         (new ConfirmPasswordResetService($userRepository, $tokenRepository))
-            ->execute(new ConfirmPasswordResetCommand(str_repeat('a', 64), 'NuevaClave2026!'));
+            ->execute(new ConfirmPasswordResetCommand(str_repeat('a', 64), 'NuevaClave2026#'));
     }
 
     #[Test]
@@ -66,6 +66,6 @@ class ConfirmPasswordResetServiceTest extends TestCase
 
         $this->expectException(InvalidPasswordResetToken::class);
         (new ConfirmPasswordResetService($userRepository, $tokenRepository))
-            ->execute(new ConfirmPasswordResetCommand(str_repeat('a', 64), 'NuevaClave2026!'));
+            ->execute(new ConfirmPasswordResetCommand(str_repeat('a', 64), 'NuevaClave2026#'));
     }
 }

@@ -9,18 +9,22 @@ use App\Application\Exception\SamePasswordException;
 use App\Application\Exception\UserNotAllowed;
 use App\Application\Exception\WeakPasswordException;
 use App\Application\Port\In\Auth\ChangePasswordCommand;
+use App\Application\Port\In\Auth\ChangePasswordResult;
 use App\Application\Port\In\Auth\ChangePasswordUseCase;
 use App\Application\Port\Out\Persistence\UserRepository;
+use App\Application\Port\Out\Security\TokenService;
 use App\Domain\User\PasswordPolicy;
 use RuntimeException;
 
 final readonly class ChangePasswordService implements ChangePasswordUseCase
 {
-    public function __construct(private UserRepository $userRepository)
-    {
+    public function __construct(
+        private UserRepository $userRepository,
+        private TokenService $tokenService,
+    ) {
     }
 
-    public function execute(ChangePasswordCommand $command): void
+    public function execute(ChangePasswordCommand $command): ChangePasswordResult
     {
         $user = $this->userRepository->findById($command->userId);
 
@@ -46,5 +50,19 @@ final readonly class ChangePasswordService implements ChangePasswordUseCase
         }
 
         $this->userRepository->updatePassword($user->id, $newPasswordHash, false);
+
+        $updatedUser = $this->userRepository->findById($user->id);
+        if ($updatedUser === null) {
+            throw new RuntimeException('No fue posible recuperar el usuario actualizado');
+        }
+
+        $issuedToken = $this->tokenService->issue($updatedUser);
+
+        return new ChangePasswordResult(
+            'Contraseña actualizada exitosamente',
+            $issuedToken->token,
+            'Bearer',
+            $issuedToken->expiresAt,
+        );
     }
 }

@@ -8,6 +8,8 @@ use App\Application\Exception\DniAlreadyExists;
 use App\Application\Exception\EmailAlreadyExists;
 use App\Application\Port\Out\Persistence\UserRepository;
 use App\Domain\User\User;
+use DateTimeImmutable;
+use DateTimeZone;
 use Illuminate\Database\QueryException;
 
 final class MySqlUserRepository implements UserRepository
@@ -58,6 +60,57 @@ final class MySqlUserRepository implements UserRepository
         }
 
         return $users;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function findAllWithDetails(?string $role = null, ?int $idSede = null): array
+    {
+        $query = UserRecord::query()
+            ->leftJoin('sedes', 'usuarios.id_sede', '=', 'sedes.id')
+            ->leftJoin('tipos_vehiculo', 'usuarios.id_tipo_vehiculo', '=', 'tipos_vehiculo.id')
+            ->select([
+                'usuarios.id',
+                'usuarios.nombres',
+                'usuarios.correo',
+                'usuarios.dni',
+                'usuarios.telefono',
+                'usuarios.rol',
+                'usuarios.activo',
+                'usuarios.id_sede',
+                'usuarios.id_tipo_vehiculo',
+                'sedes.nombre as sede_nombre',
+                'tipos_vehiculo.nombre as tipo_vehiculo_nombre',
+            ])
+            ->orderBy('usuarios.id');
+
+        if ($role !== null) {
+            $query->where('usuarios.rol', $role);
+        }
+
+        if ($idSede !== null) {
+            $query->where('usuarios.id_sede', $idSede);
+        }
+
+        $results = [];
+        foreach ($query->get() as $row) {
+            $results[] = [
+                'id' => (int) $row->id,
+                'nombres' => (string) $row->nombres,
+                'correo' => (string) $row->correo,
+                'dni' => (string) ($row->dni ?? ''),
+                'telefono' => $row->telefono !== null ? (string) $row->telefono : null,
+                'rol' => (string) $row->rol,
+                'activo' => (bool) $row->activo,
+                'id_sede' => $row->id_sede !== null ? (int) $row->id_sede : null,
+                'id_tipo_vehiculo' => $row->id_tipo_vehiculo !== null ? (int) $row->id_tipo_vehiculo : null,
+                'sede_nombre' => $row->sede_nombre !== null ? (string) $row->sede_nombre : null,
+                'tipo_vehiculo' => $row->tipo_vehiculo_nombre !== null ? (string) $row->tipo_vehiculo_nombre : null,
+            ];
+        }
+
+        return $results;
     }
 
     public function existsByEmail(string $email): bool
@@ -115,7 +168,7 @@ final class MySqlUserRepository implements UserRepository
             ->update([
                 'password_hash' => $newPasswordHash,
                 'debe_cambiar_password' => $mustChangePassword,
-                'password_changed_at' => date('Y-m-d H:i:s'),
+                'password_changed_at' => gmdate('Y-m-d H:i:s'),
             ]);
     }
 
@@ -133,6 +186,12 @@ final class MySqlUserRepository implements UserRepository
 
     private function toDomain(UserRecord $record): User
     {
+        $passwordChangedAt = null;
+        $rawChangedAt = $record->getAttribute('password_changed_at');
+        if ($rawChangedAt !== null && is_string($rawChangedAt) && $rawChangedAt !== '') {
+            $passwordChangedAt = new DateTimeImmutable($rawChangedAt, new DateTimeZone('UTC'));
+        }
+
         return new User(
             (int) $record->getAttribute('id'),
             (string) $record->getAttribute('nombres'),
@@ -142,9 +201,10 @@ final class MySqlUserRepository implements UserRepository
             (bool) $record->getAttribute('activo'),
             $record->getAttribute('telefono') === null ? null : (string) $record->getAttribute('telefono'),
             (bool) $record->getAttribute('debe_cambiar_password'),
-            (string) $record->getAttribute('dni'),
+            (string) ($record->getAttribute('dni') ?? ''),
             $record->getAttribute('id_sede') === null ? null : (int) $record->getAttribute('id_sede'),
             $record->getAttribute('id_tipo_vehiculo') === null ? null : (int) $record->getAttribute('id_tipo_vehiculo'),
+            $passwordChangedAt,
         );
     }
 }

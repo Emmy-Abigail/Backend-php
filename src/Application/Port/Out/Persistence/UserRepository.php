@@ -17,6 +17,11 @@ interface UserRepository
      */
     public function findAll(?string $role = null, ?int $idSede = null): array;
 
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function findAllWithDetails(?string $role = null, ?int $idSede = null): array;
+
     public function existsByEmail(string $email): bool;
 
     public function existsByDni(string $dni): bool;

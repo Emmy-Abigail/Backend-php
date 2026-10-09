@@ -6,21 +6,44 @@ namespace Tests\Unit\Application\Service\User;
 
 use App\Application\Port\Out\Persistence\UserRepository;
 use App\Application\Service\User\ListUsersService;
-use App\Domain\User\User;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
 
 final class ListUsersServiceTest extends TestCase
 {
     #[Test]
-    public function lista_los_usuarios_sin_exponer_su_hash_de_contrasena(): void
+    public function lista_los_usuarios_con_detalles_sin_exponer_hash_de_contrasena(): void
     {
         $repository = $this->createMock(UserRepository::class);
         $repository->expects($this->once())
-            ->method('findAll')
+            ->method('findAllWithDetails')
             ->willReturn([
-                new User(1, 'Administrador', 'admin@email.com', 'hash-secreto', 'Admin', true, null),
-                new User(2, 'Conductor', 'conductor@email.com', 'otro-hash', 'Conductor', false, '999888777'),
+                [
+                    'id' => 1,
+                    'nombres' => 'Administrador',
+                    'correo' => 'admin@email.com',
+                    'dni' => '11111111',
+                    'telefono' => null,
+                    'rol' => 'ADMINISTRADOR',
+                    'activo' => true,
+                    'id_sede' => null,
+                    'id_tipo_vehiculo' => null,
+                    'sede_nombre' => null,
+                    'tipo_vehiculo' => null,
+                ],
+                [
+                    'id' => 2,
+                    'nombres' => 'Conductor Prueba',
+                    'correo' => 'conductor@email.com',
+                    'dni' => '22222222',
+                    'telefono' => '999888777',
+                    'rol' => 'CONDUCTOR',
+                    'activo' => false,
+                    'id_sede' => null,
+                    'id_tipo_vehiculo' => 1,
+                    'sede_nombre' => null,
+                    'tipo_vehiculo' => 'Furgoneta',
+                ],
             ]);
 
         $result = (new ListUsersService($repository))->execute();
@@ -30,14 +53,14 @@ final class ListUsersServiceTest extends TestCase
         self::assertNull($result->users[0]->phone);
         self::assertSame('999888777', $result->users[1]->phone);
         self::assertFalse($result->users[1]->active);
-        self::assertFalse(property_exists($result->users[0], 'passwordHash'));
+        self::assertSame('Furgoneta', $result->users[1]->tipoVehiculo);
     }
 
     #[Test]
     public function devuelve_una_lista_vacia_cuando_no_hay_personal_registrado(): void
     {
         $repository = $this->createStub(UserRepository::class);
-        $repository->method('findAll')->willReturn([]);
+        $repository->method('findAllWithDetails')->willReturn([]);
 
         $result = (new ListUsersService($repository))->execute();
 

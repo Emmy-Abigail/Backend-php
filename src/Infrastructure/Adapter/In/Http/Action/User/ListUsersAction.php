@@ -24,13 +24,13 @@ final readonly class ListUsersAction
 
         $role = $queryParams['rol'] ?? null;
         if ($role !== null && !in_array($role, self::ALLOWED_ROLES, true)) {
-            return $this->json($response, ['message' => 'El filtro rol no es vÃ¡lido'], 422);
+            return $this->json($response, ['message' => 'El filtro rol no es válido', 'error' => 'filtro_invalido'], 422);
         }
 
         $idSede = null;
         if (isset($queryParams['sede']) && $queryParams['sede'] !== '') {
             if (!is_numeric($queryParams['sede'])) {
-                return $this->json($response, ['message' => 'El filtro sede debe ser numÃ©rico'], 422);
+                return $this->json($response, ['message' => 'El filtro sede debe ser numérico', 'error' => 'filtro_invalido'], 422);
             }
             $idSede = (int) $queryParams['sede'];
         }
@@ -48,9 +48,14 @@ final readonly class ListUsersAction
                     'id' => $user->id,
                     'nombres' => $user->names,
                     'correo' => $user->email,
+                    'dni' => $user->dni,
                     'telefono' => $user->phone,
                     'rol' => $user->role,
                     'activo' => $user->active,
+                    'id_sede' => $user->idSede,
+                    'id_tipo_vehiculo' => $user->idTipoVehiculo,
+                    'sede_nombre' => $user->sedeNombre,
+                    'tipo_vehiculo' => $user->tipoVehiculo,
                 ],
                 $result->users,
             ),

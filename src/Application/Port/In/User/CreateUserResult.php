@@ -15,6 +15,7 @@ final readonly class CreateUserResult
         public ?int $idSede,
         public ?int $idTipoVehiculo,
         public string $temporaryPassword,
+        public bool $emailSent = true,
     ) {
     }
 }
