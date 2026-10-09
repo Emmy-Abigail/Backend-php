@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Infrastructure\Adapter\In\Http\Action\User;
 
 use App\Application\Exception\EmailAlreadyExists;
+use App\Application\Exception\InvalidPlacaFormat;
 use App\Application\Exception\PlacaAlreadyExists;
 use App\Application\Port\In\User\CreateUserCommand;
 use App\Application\Port\In\User\CreateUserResult;
@@ -134,17 +135,17 @@ final class CreateUserActionTest extends TestCase
     }
 
     #[Test]
-    public function rechaza_placa_invalida_segun_tipo_de_vehiculo(): void
+    public function convierte_el_formato_de_placa_invalido_en_422(): void
     {
-        $action = new CreateUserAction($this->useCaseThatNeverRuns());
+        // El formato según tipo de vehículo ahora lo valida CreateUserService (Domain/PlacaPolicy),
+        // no la Action — aquí solo verificamos que la Action traduzca esa excepción a 422.
+        $useCase = $this->createStub(CreateUserUseCase::class);
+        $useCase->method('execute')->willThrowException(new InvalidPlacaFormat());
 
-        // Para AUTO (tipo 2), debe tener 3 letras y 3 números
-        $resAuto = $action($this->request($this->conductorBody(['id_tipo_vehiculo' => 2, 'placa' => 'AB-5555'])), $this->response());
-        self::assertSame(422, $resAuto->getStatusCode());
+        $response = (new CreateUserAction($useCase))($this->request($this->conductorBody(['id_tipo_vehiculo' => 1, 'placa' => 'ABC-123'])), $this->response());
 
-        // Para MOTORIZADO (tipo 1), debe tener formato de moto
-        $resMoto = $action($this->request($this->conductorBody(['id_tipo_vehiculo' => 1, 'placa' => 'ABC-123'])), $this->response());
-        self::assertSame(422, $resMoto->getStatusCode());
+        self::assertSame(422, $response->getStatusCode());
+        self::assertSame('placa_invalida', json_decode((string) $response->getBody(), true)['error']);
     }
 
     #[Test]

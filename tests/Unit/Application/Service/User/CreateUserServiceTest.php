@@ -32,7 +32,7 @@ final class CreateUserServiceTest extends TestCase
         return $catalog;
     }
 
-    private function conductorCommand(string $placa = 'ABC123'): CreateUserCommand
+    private function conductorCommand(string $placa = 'AB1234'): CreateUserCommand
     {
         return new CreateUserCommand('Conductor Uno', '12345678', 'conductor@email.com', '999888777', 'CONDUCTOR', null, 1, $placa);
     }
@@ -46,7 +46,7 @@ final class CreateUserServiceTest extends TestCase
         $repository = $this->createMock(UserRepository::class);
         $repository->method('existsByEmail')->willReturn(false);
         $repository->method('existsByDni')->willReturn(false);
-        $repository->expects($this->once())->method('existsByPlaca')->with('ABC123')->willReturn(false);
+        $repository->expects($this->once())->method('existsByPlaca')->with('AB1234')->willReturn(false);
         $repository->expects($this->once())
             ->method('create')
             ->willReturnCallback(function (
@@ -61,7 +61,7 @@ final class CreateUserServiceTest extends TestCase
                 ?string $placa = null,
             ) use (&$generatedHash): User {
                 $generatedHash = $passwordHash;
-                self::assertSame('ABC123', $placa);
+                self::assertSame('AB1234', $placa);
 
                 return new User(2, $names, $email, $passwordHash, $role, true, $phone, true, $dni, $idSede, $idTipoVehiculo, null, $placa);
             });
@@ -83,7 +83,7 @@ final class CreateUserServiceTest extends TestCase
         self::assertTrue(password_verify($temporaryPasswordSent, $generatedHash));
         self::assertSame(2, $result->id);
         self::assertSame('CONDUCTOR', $result->role);
-        self::assertSame('ABC123', $result->placa);
+        self::assertSame('AB1234', $result->placa);
         self::assertTrue($result->emailSent);
     }
 
@@ -141,7 +141,7 @@ final class CreateUserServiceTest extends TestCase
         $repository->method('existsByPlaca')->willReturn(false);
         $repository->expects($this->once())
             ->method('create')
-            ->willReturn(new User(2, 'Conductor Uno', 'conductor@email.com', 'hash', 'CONDUCTOR', true, null, true, '12345678', null, 1, null, 'ABC123'));
+            ->willReturn(new User(2, 'Conductor Uno', 'conductor@email.com', 'hash', 'CONDUCTOR', true, null, true, '12345678', null, 1, null, 'AB1234'));
         $repository->expects($this->never())->method('deleteById');
 
         $mailer = $this->createMock(UserCredentialsMailer::class);
@@ -150,6 +150,6 @@ final class CreateUserServiceTest extends TestCase
         $result = (new CreateUserService($repository, $this->catalogWithVehicleType(), $mailer))->execute($this->conductorCommand());
 
         self::assertFalse($result->emailSent);
-        self::assertSame('ABC123', $result->placa);
+        self::assertSame('AB1234', $result->placa);
     }
 }
