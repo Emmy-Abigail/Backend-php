@@ -65,6 +65,13 @@ nuevo que debe guardar el frontend.
   * Usuarios creados con contraseÃ±a temporal tienen `debe_cambiar_password = true`.
   * El middleware `MustChangePasswordMiddleware` bloquea cualquier acceso operativo con `403 Forbidden` (`"Debes cambiar tu contraseÃ±a"`), permitiendo Ãºnicamente acceder a `/auth/me` y a `/auth/change-password`.
 
+### Flujo de autenticación
+
+1. **Inicio de sesión:** El cliente realiza una solicitud `POST /api/v1/auth/login` con sus credenciales (`correo` y `password`).
+2. **Emisión del token:** La API verifica las credenciales y devuelve un token JWT con vigencia de 8 horas (`expires_at` en formato ISO 8601) junto con los datos del usuario autenticado.
+3. **Uso del token:** En solicitudes subsecuentes a endpoints protegidos, el cliente debe incluir la cabecera HTTP `Authorization: Bearer <token>`.
+4. **Polling de sesión:** Mientras haya sesión abierta, el cliente consulta periódicamente `GET /api/v1/auth/session`. Responde `204` si la sesión sigue vigente y `401` si el token expiró o un administrador desactivó al usuario; ante un `401` el cliente debe borrar el token y volver al login.
+
 ---
 
 ## 4. Endpoints Disponibles (Ã‰pica 1)
@@ -75,6 +82,7 @@ nuevo que debe guardar el frontend.
 ### AutenticaciÃ³n y Seguridad
 * `POST /api/v1/auth/login` â€” Iniciar sesiÃ³n (responde 401 `"Credenciales incorrectas"` en fallos).
 * `GET /api/v1/auth/me` â€” Datos del usuario autenticado (incluye sede para Operadores).
+* `GET /api/v1/auth/session` — Comprobar sesión vigente: `204` si es válida; `401` si expiró, es inválida o el usuario fue desactivado.
 * `PATCH /api/v1/auth/change-password` â€” Cambio de contraseÃ±a (emite nuevo JWT).
 * `POST /api/v1/auth/password-reset/request` â€” Solicitud de recuperaciÃ³n por correo.
 * `POST /api/v1/auth/password-reset/confirm` â€” Restablecimiento de contraseÃ±a con token.

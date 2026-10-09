@@ -36,6 +36,8 @@ final class AuthenticateTokenServiceTest extends TestCase
         $authUser = $service->execute('valid-token');
 
         self::assertSame(1, $authUser->id);
+        self::assertSame('Admin', $authUser->names);
+        self::assertSame('admin@email.com', $authUser->email);
         self::assertSame('ADMINISTRADOR', $authUser->role);
     }
 
@@ -136,5 +138,23 @@ final class AuthenticateTokenServiceTest extends TestCase
 
         $this->expectException(UserNotAllowed::class);
         (new AuthenticateTokenService($tokens, $repository))->execute('token');
+    }
+
+    #[Test]
+    public function test_token_invalido_propaga_la_excepcion_sin_consultar_el_repositorio(): void
+    {
+        $tokenService = $this->createMock(TokenService::class);
+        $tokenService->expects($this->once())
+            ->method('verify')
+            ->with('token-malformado')
+            ->willThrowException(new InvalidToken());
+
+        $userRepository = $this->createMock(UserRepository::class);
+        $userRepository->expects($this->never())->method('findById');
+
+        $service = new AuthenticateTokenService($tokenService, $userRepository);
+
+        $this->expectException(InvalidToken::class);
+        $service->execute('token-malformado');
     }
 }
