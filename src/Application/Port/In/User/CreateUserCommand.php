@@ -14,6 +14,7 @@ final readonly class CreateUserCommand
         public string $role,
         public ?int $idSede,
         public ?int $idTipoVehiculo,
+        public ?string $placa = null,
     ) {
     }
 }

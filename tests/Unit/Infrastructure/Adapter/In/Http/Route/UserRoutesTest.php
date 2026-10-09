@@ -6,13 +6,16 @@ namespace Tests\Unit\Infrastructure\Adapter\In\Http\Route;
 
 use App\Application\Port\In\Auth\AuthenticateTokenUseCase;
 use App\Application\Port\In\Auth\AuthenticatedUser;
+use App\Application\Port\In\User\ChangeUserStatusUseCase;
 use App\Application\Port\In\User\CreateUserResult;
 use App\Application\Port\In\User\CreateUserUseCase;
 use App\Application\Port\In\User\ListUsersResult;
 use App\Application\Port\In\User\ListUsersUseCase;
+use App\Infrastructure\Adapter\In\Http\Action\User\ChangeUserStatusAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\CreateUserAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\ListUsersAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
+use App\Infrastructure\Adapter\In\Http\Middleware\MustChangePasswordMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
@@ -24,7 +27,7 @@ final class UserRoutesTest extends TestCase
     #[Test]
     public function rechaza_crear_usuarios_sin_token(): void
     {
-        $app = $this->appForRole('Admin');
+        $app = $this->appForRole('ADMINISTRADOR');
         $request = (new ServerRequestFactory())->createServerRequest('POST', '/api/v1/users');
 
         self::assertSame(401, $app->handle($request)->getStatusCode());
@@ -33,7 +36,7 @@ final class UserRoutesTest extends TestCase
     #[Test]
     public function rechaza_a_un_conductor_aun_con_token_valido(): void
     {
-        $app = $this->appForRole('Conductor');
+        $app = $this->appForRole('CONDUCTOR');
         $request = (new ServerRequestFactory())
             ->createServerRequest('POST', '/api/v1/users')
             ->withHeader('Authorization', 'Bearer token-valido');
@@ -44,7 +47,7 @@ final class UserRoutesTest extends TestCase
     #[Test]
     public function permite_a_un_admin_listar_el_personal(): void
     {
-        $app = $this->appForRole('Admin');
+        $app = $this->appForRole('ADMINISTRADOR');
         $request = (new ServerRequestFactory())
             ->createServerRequest('GET', '/api/v1/users')
             ->withHeader('Authorization', 'Bearer token-valido');
@@ -55,15 +58,18 @@ final class UserRoutesTest extends TestCase
     private function appForRole(string $role): \Slim\App
     {
         $useCase = $this->createStub(CreateUserUseCase::class);
-        $useCase->method('execute')->willReturn(new CreateUserResult(2, 'Usuario', 'usuario@email.com', 'Conductor'));
+        $useCase->method('execute')->willReturn(new CreateUserResult(2, 'Usuario', '12345678', 'usuario@email.com', 'CONDUCTOR', null, 1, 'ClaveTemp123@', true, 'ABC123'));
         $action = new CreateUserAction($useCase);
 
         $listUsersUseCase = $this->createStub(ListUsersUseCase::class);
         $listUsersUseCase->method('execute')->willReturn(new ListUsersResult([]));
         $listUsersAction = new ListUsersAction($listUsersUseCase);
 
+        $changeStatusUseCase = $this->createStub(ChangeUserStatusUseCase::class);
+        $changeUserStatusAction = new ChangeUserStatusAction($changeStatusUseCase);
+
         $authenticateToken = $this->createStub(AuthenticateTokenUseCase::class);
-        $authenticateToken->method('execute')->willReturn(new AuthenticatedUser(1, 'Admin', 'admin@email.com', $role));
+        $authenticateToken->method('execute')->willReturn(new AuthenticatedUser(1, 'Admin', 'admin@email.com', $role, false));
 
         $app = AppFactory::create();
         $registerRoutes = require __DIR__ . '/../../../../../../../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php';
@@ -71,8 +77,10 @@ final class UserRoutesTest extends TestCase
             $app,
             $action,
             $listUsersAction,
+            $changeUserStatusAction,
             new JwtAuthMiddleware($authenticateToken),
-            new RoleMiddleware('Admin'),
+            new RoleMiddleware('ADMINISTRADOR', 'Admin'),
+            new MustChangePasswordMiddleware(),
         );
 
         return $app;

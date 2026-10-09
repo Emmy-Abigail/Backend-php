@@ -22,6 +22,7 @@ final class UserRecord extends Model
         'rol',
         'id_sede',
         'id_tipo_vehiculo',
+        'placa',
         'password_hash',
         'debe_cambiar_password',
         'password_changed_at',

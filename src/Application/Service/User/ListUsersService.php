@@ -32,6 +32,7 @@ final readonly class ListUsersService implements ListUsersUseCase
                 $u['id_tipo_vehiculo'],
                 $u['sede_nombre'],
                 $u['tipo_vehiculo'],
+                $u['placa'] ?? null,
             ),
             $rawUsers,
         );

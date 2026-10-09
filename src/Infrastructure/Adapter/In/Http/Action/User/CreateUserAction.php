@@ -7,6 +7,7 @@ namespace App\Infrastructure\Adapter\In\Http\Action\User;
 use App\Application\Exception\DniAlreadyExists;
 use App\Application\Exception\EmailAlreadyExists;
 use App\Application\Exception\InvalidCatalogReference;
+use App\Application\Exception\PlacaAlreadyExists;
 use App\Application\Port\In\User\CreateUserCommand;
 use App\Application\Port\In\User\CreateUserUseCase;
 use Psr\Http\Message\ResponseInterface;
@@ -15,6 +16,18 @@ use Psr\Http\Message\ServerRequestInterface;
 final readonly class CreateUserAction
 {
     private const ALLOWED_ROLES = ['OPERADOR', 'CONDUCTOR'];
+
+    /** DNI peruano: exactamente 8 dígitos numéricos. */
+    private const DNI_PATTERN = '/^\d{8}$/';
+
+    /** Teléfono de contacto peruano: exactamente 9 dígitos numéricos (comenzando con 9). */
+    private const PHONE_PATTERN = '/^9\d{8}$/';
+
+    /** Placa para motorizado (moto): 2 letras y 4 números (ej. AB-5555) o viceversa. */
+    private const MOTO_PLACA_PATTERN = '/^([A-Z]{2}\d{4}|\d{4}[A-Z]{2})$/';
+
+    /** Placa para auto o camión: 3 letras y 3 números (ej. ABC-123, FNB-456). */
+    private const AUTO_CAMION_PLACA_PATTERN = '/^[A-Z]{3}\d{3}$/';
 
     public function __construct(private CreateUserUseCase $createUserUseCase)
     {
@@ -35,6 +48,7 @@ final readonly class CreateUserAction
         $role = $body['rol'] ?? null;
         $idSede = $body['id_sede'] ?? null;
         $idTipoVehiculo = $body['id_tipo_vehiculo'] ?? null;
+        $placa = $body['placa'] ?? null;
 
         if (!is_string($names)) {
             return $this->json($response, ['message' => 'El campo nombres es obligatorio', 'error' => 'campo_obligatorio'], 422);
@@ -45,8 +59,13 @@ final readonly class CreateUserAction
             return $this->json($response, ['message' => 'El campo nombres debe tener entre 1 y 150 caracteres', 'error' => 'campo_invalido'], 422);
         }
 
-        if (!is_string($dni) || !preg_match('/^\d{8}$/', $dni)) {
-            return $this->json($response, ['message' => 'El campo dni debe tener 8 dígitos', 'error' => 'campo_invalido'], 422);
+        if (!is_string($dni) || trim($dni) === '') {
+            return $this->json($response, ['message' => 'El campo dni es obligatorio', 'error' => 'campo_obligatorio'], 422);
+        }
+
+        $dni = trim($dni);
+        if (!preg_match(self::DNI_PATTERN, $dni)) {
+            return $this->json($response, ['message' => 'El campo dni debe tener exactamente 8 dígitos numéricos', 'error' => 'campo_invalido'], 422);
         }
 
         if (!is_string($email)) {
@@ -68,11 +87,23 @@ final readonly class CreateUserAction
         }
 
         if (is_string($phone)) {
-            $phone = trim($phone);
+            $phone = preg_replace('/\s+/', '', $phone) ?? '';
             if ($phone === '') {
                 $phone = null;
-            } elseif (strlen($phone) > 20) {
-                return $this->json($response, ['message' => 'El campo telefono no puede superar 20 caracteres', 'error' => 'campo_invalido'], 422);
+            } elseif (!preg_match(self::PHONE_PATTERN, $phone)) {
+                return $this->json($response, ['message' => 'El campo telefono debe tener exactamente 9 dígitos numéricos y comenzar con 9', 'error' => 'campo_invalido'], 422);
+            }
+        }
+
+        if ($placa !== null && !is_string($placa)) {
+            return $this->json($response, ['message' => 'El campo placa no es válido', 'error' => 'campo_invalido'], 422);
+        }
+
+        if (is_string($placa)) {
+            // Normalización: "abc-123", "ABC 123" y "ABC123" se limpian a "ABC123"
+            $placa = strtoupper(preg_replace('/[\s-]+/', '', $placa) ?? '');
+            if ($placa === '') {
+                $placa = null;
             }
         }
 
@@ -83,6 +114,9 @@ final readonly class CreateUserAction
             if ($idTipoVehiculo !== null) {
                 return $this->json($response, ['message' => 'El campo id_tipo_vehiculo no aplica para el rol OPERADOR', 'error' => 'campo_invalido'], 422);
             }
+            if ($placa !== null) {
+                return $this->json($response, ['message' => 'El campo placa no aplica para el rol OPERADOR', 'error' => 'campo_invalido'], 422);
+            }
         }
 
         if ($role === 'CONDUCTOR') {
@@ -92,16 +126,44 @@ final readonly class CreateUserAction
             if ($idSede !== null) {
                 return $this->json($response, ['message' => 'El campo id_sede no aplica para el rol CONDUCTOR', 'error' => 'campo_invalido'], 422);
             }
+            if ($placa === null) {
+                return $this->json($response, ['message' => 'El campo placa es obligatorio para el rol CONDUCTOR', 'error' => 'campo_obligatorio'], 422);
+            }
+
+            // Validar según el tipo de vehículo seleccionado
+            if ($idTipoVehiculo === 1) { // 1 = MOTORIZADO (Moto)
+                if (!preg_match(self::MOTO_PLACA_PATTERN, $placa)) {
+                    return $this->json($response, [
+                        'message' => 'La placa para motorizado debe tener el formato de moto (2 letras y 4 números, por ejemplo AB-5555)',
+                        'error' => 'campo_invalido',
+                    ], 422);
+                }
+            } elseif ($idTipoVehiculo === 2 || $idTipoVehiculo === 3) { // 2 = AUTO, 3 = CAMION
+                if (!preg_match(self::AUTO_CAMION_PLACA_PATTERN, $placa)) {
+                    $tipoNombre = $idTipoVehiculo === 2 ? 'auto' : 'camión';
+                    return $this->json($response, [
+                        'message' => "La placa para {$tipoNombre} debe tener 3 letras y 3 números (por ejemplo ABC-123)",
+                        'error' => 'campo_invalido',
+                    ], 422);
+                }
+            } elseif (!preg_match('/^(?=.*[A-Z])[A-Z0-9]{6,7}$/', $placa)) {
+                return $this->json($response, [
+                    'message' => 'El formato de la placa no es válido',
+                    'error' => 'campo_invalido',
+                ], 422);
+            }
         }
 
         try {
             $result = $this->createUserUseCase->execute(
-                new CreateUserCommand($names, $dni, $email, $phone, $role, $idSede, $idTipoVehiculo),
+                new CreateUserCommand($names, $dni, $email, $phone, $role, $idSede, $idTipoVehiculo, $placa),
             );
         } catch (EmailAlreadyExists) {
             return $this->json($response, ['message' => 'Ya existe un usuario con ese correo', 'error' => 'correo_duplicado'], 409);
         } catch (DniAlreadyExists) {
             return $this->json($response, ['message' => 'Ya existe un usuario con ese DNI', 'error' => 'dni_duplicado'], 409);
+        } catch (PlacaAlreadyExists) {
+            return $this->json($response, ['message' => 'Ya existe un conductor con esa placa', 'error' => 'placa_duplicada'], 409);
         } catch (InvalidCatalogReference $exception) {
             return $this->json($response, ['message' => $exception->getMessage(), 'error' => 'referencia_invalida'], 422);
         }
@@ -114,6 +176,7 @@ final readonly class CreateUserAction
             'rol' => $result->role,
             'id_sede' => $result->idSede,
             'id_tipo_vehiculo' => $result->idTipoVehiculo,
+            'placa' => $result->placa,
             'password_temporal' => $result->temporaryPassword,
             'correo_enviado' => $result->emailSent,
         ], 201);

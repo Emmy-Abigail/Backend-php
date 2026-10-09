@@ -7,6 +7,7 @@ namespace App\Application\Service\User;
 use App\Application\Exception\DniAlreadyExists;
 use App\Application\Exception\EmailAlreadyExists;
 use App\Application\Exception\InvalidCatalogReference;
+use App\Application\Exception\PlacaAlreadyExists;
 use App\Application\Port\In\User\CreateUserCommand;
 use App\Application\Port\In\User\CreateUserResult;
 use App\Application\Port\In\User\CreateUserUseCase;
@@ -56,7 +57,13 @@ final readonly class CreateUserService implements CreateUserUseCase
             if (!in_array($command->idTipoVehiculo, $vehicleTypeIds, true)) {
                 throw new InvalidCatalogReference('El tipo de vehículo indicado no existe');
             }
+
+            if ($command->placa !== null && $this->userRepository->existsByPlaca($command->placa)) {
+                throw new PlacaAlreadyExists('Ya existe un conductor con esa placa');
+            }
         }
+
+        $placa = $command->role === 'CONDUCTOR' ? $command->placa : null;
 
         $temporaryPassword = PasswordPolicy::generateTemporaryPassword(12);
         $passwordHash = password_hash($temporaryPassword, PASSWORD_DEFAULT);
@@ -74,6 +81,7 @@ final readonly class CreateUserService implements CreateUserUseCase
             $command->role,
             $command->idSede,
             $command->idTipoVehiculo,
+            $placa,
         );
 
         $emailSent = true;
@@ -98,6 +106,7 @@ final readonly class CreateUserService implements CreateUserUseCase
             $user->idTipoVehiculo,
             $temporaryPassword,
             $emailSent,
+            $user->placa,
         );
     }
 }

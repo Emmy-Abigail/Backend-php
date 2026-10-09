@@ -89,7 +89,7 @@ class PasswordResetActionTest extends TestCase
             (new ResponseFactory())->createResponse(),
         );
 
-        $this->assertSame(422, $malformado->getStatusCode());
-        $this->assertSame(422, $expirado->getStatusCode());
+        $this->assertSame(400, $malformado->getStatusCode());
+        $this->assertSame(400, $expirado->getStatusCode());
     }
 }

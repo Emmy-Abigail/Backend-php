@@ -30,6 +30,7 @@ final class ListUsersServiceTest extends TestCase
                     'id_tipo_vehiculo' => null,
                     'sede_nombre' => null,
                     'tipo_vehiculo' => null,
+                    'placa' => null,
                 ],
                 [
                     'id' => 2,
@@ -42,7 +43,8 @@ final class ListUsersServiceTest extends TestCase
                     'id_sede' => null,
                     'id_tipo_vehiculo' => 1,
                     'sede_nombre' => null,
-                    'tipo_vehiculo' => 'Furgoneta',
+                    'tipo_vehiculo' => 'Motorizado',
+                    'placa' => 'AB5555',
                 ],
             ]);
 
@@ -53,7 +55,8 @@ final class ListUsersServiceTest extends TestCase
         self::assertNull($result->users[0]->phone);
         self::assertSame('999888777', $result->users[1]->phone);
         self::assertFalse($result->users[1]->active);
-        self::assertSame('Furgoneta', $result->users[1]->tipoVehiculo);
+        self::assertSame('Motorizado', $result->users[1]->tipoVehiculo);
+        self::assertSame('AB5555', $result->users[1]->placa);
     }
 
     #[Test]

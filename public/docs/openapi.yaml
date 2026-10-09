@@ -1,46 +1,46 @@
 openapi: 3.0.3
 info:
-  title: Sistema de Gestión de Envíos API
+  title: Sistema de GestiÃ³n de EnvÃ­os API
   version: 1.0.0
   description: |
-    Documentación de la API de RIVA - Sistema de Gestión de Envíos.
+    DocumentaciÃ³n de la API de RIVA - Sistema de GestiÃ³n de EnvÃ­os.
     Arquitectura Hexagonal con PHP 8.4 y Slim Framework 4.
 
     ## Convenciones de Respuestas de Error
     Todas las respuestas de error siguen el contrato uniforme:
     ```json
     {
-      "message": "Descripción legible del error",
+      "message": "DescripciÃ³n legible del error",
       "error": "codigo_error_en_snake_case"
     }
     ```
 
     ## Rutas Pendientes
-    Las rutas marcadas como **Pendiente** responden con código `501 Endpoint aún no implementado`.
+    Las rutas marcadas como **Pendiente** responden con cÃ³digo `501 Endpoint aÃºn no implementado`.
 servers:
   - url: /
     description: Servidor actual
 tags:
   - name: Salud
-  - name: Autenticación
+  - name: AutenticaciÃ³n
   - name: Usuarios
-  - name: Catálogos
-  - name: Paquetes (próximamente)
-  - name: Lotes (próximamente)
-  - name: Conductor (próximamente)
-  - name: Entregas (próximamente)
-  - name: Seguimiento (próximamente)
-  - name: Dashboard (próximamente)
-  - name: Zonas (próximamente)
+  - name: CatÃ¡logos
+  - name: Paquetes (prÃ³ximamente)
+  - name: Lotes (prÃ³ximamente)
+  - name: Conductor (prÃ³ximamente)
+  - name: Entregas (prÃ³ximamente)
+  - name: Seguimiento (prÃ³ximamente)
+  - name: Dashboard (prÃ³ximamente)
+  - name: Zonas (prÃ³ximamente)
 
 paths:
   /health:
     get:
       tags: [Salud]
-      summary: Verificación de estado del servidor (Health Check)
+      summary: VerificaciÃ³n de estado del servidor (Health Check)
       responses:
         '200':
-          description: Servidor en línea y respondiendo
+          description: Servidor en lÃ­nea y respondiendo
           content:
             application/json:
               schema:
@@ -52,11 +52,11 @@ paths:
 
   /api/v1/auth/login:
     post:
-      tags: [Autenticación]
-      summary: Iniciar sesión
+      tags: [AutenticaciÃ³n]
+      summary: Iniciar sesiÃ³n
       description: |
-        Autentica al usuario con correo y contraseña.
-        Retorna el token JWT con expiración en zona horaria America/Lima (-05:00).
+        Autentica al usuario con correo y contraseÃ±a.
+        Retorna el token JWT con expiraciÃ³n en zona horaria America/Lima (-05:00).
         Para usuarios con rol OPERADOR se incluye el objeto sede {id, nombre}.
       requestBody:
         required: true
@@ -66,7 +66,7 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: Inicio de sesión exitoso
+          description: Inicio de sesiÃ³n exitoso
           content:
             application/json:
               schema:
@@ -80,9 +80,9 @@ paths:
 
   /api/v1/auth/me:
     get:
-      tags: [Autenticación]
+      tags: [AutenticaciÃ³n]
       summary: Obtener perfil del usuario autenticado
-      description: Retorna la información del usuario del token JWT activo.
+      description: Retorna la informaciÃ³n del usuario del token JWT activo.
       security:
         - bearerAuth: []
       responses:
@@ -97,17 +97,17 @@ paths:
 
   /api/v1/auth/change-password:
     patch:
-      tags: [Autenticación]
-      summary: Cambiar contraseña
+      tags: [AutenticaciÃ³n]
+      summary: Cambiar contraseÃ±a
       description: |
-        Permite al usuario cambiar su contraseña. 
-        Política de contraseña:
+        Permite al usuario cambiar su contraseÃ±a. 
+        PolÃ­tica de contraseÃ±a:
         - Longitud entre 8 y 72 caracteres.
-        - Al menos una letra mayúscula.
-        - Al menos un número.
-        - Al menos un símbolo permitido (@, #, $, %, &).
+        - Al menos una letra mayÃºscula.
+        - Al menos un nÃºmero.
+        - Al menos un sÃ­mbolo permitido (@, #, $, %, &).
         
-        Al cambiarse la contraseña se actualiza password_changed_at en BD, 
+        Al cambiarse la contraseÃ±a se actualiza password_changed_at en BD, 
         se invalidan los tokens JWT anteriores y se devuelve un nuevo JWT activo.
       security:
         - bearerAuth: []
@@ -119,37 +119,37 @@ paths:
               $ref: '#/components/schemas/ChangePasswordRequest'
       responses:
         '200':
-          description: Contraseña actualizada exitosamente con nuevo JWT emitido
+          description: ContraseÃ±a actualizada exitosamente con nuevo JWT emitido
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChangePasswordResponse'
         '400':
-          description: Contraseña actual incorrecta
+          description: ContraseÃ±a actual incorrecta
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                message: La contraseña actual es incorrecta.
+                message: La contraseÃ±a actual es incorrecta.
                 error: password_actual_incorrecta
         '401':
           $ref: '#/components/responses/Unauthorized'
         '422':
-          description: Nueva contraseña no cumple la política
+          description: Nueva contraseÃ±a no cumple la polÃ­tica
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                message: La nueva contraseña no cumple con los requisitos de seguridad.
+                message: La nueva contraseÃ±a no cumple con los requisitos de seguridad.
                 error: password_invalida
 
   /api/v1/auth/password-reset/request:
     post:
-      tags: [Autenticación]
-      summary: Solicitar recuperación de contraseña
-      description: Genera un token de recuperación y lo envía por correo electrónico.
+      tags: [AutenticaciÃ³n]
+      summary: Solicitar recuperaciÃ³n de contraseÃ±a
+      description: Genera un token de recuperaciÃ³n y lo envÃ­a por correo electrÃ³nico.
       requestBody:
         required: true
         content:
@@ -170,9 +170,9 @@ paths:
 
   /api/v1/auth/password-reset/confirm:
     post:
-      tags: [Autenticación]
-      summary: Confirmar restablecimiento de contraseña
-      description: Valida el token de recuperación y actualiza la contraseña del usuario.
+      tags: [AutenticaciÃ³n]
+      summary: Confirmar restablecimiento de contraseÃ±a
+      description: Valida el token de recuperaciÃ³n y actualiza la contraseÃ±a del usuario.
       requestBody:
         required: true
         content:
@@ -181,28 +181,28 @@ paths:
               $ref: '#/components/schemas/PasswordResetConfirmRequest'
       responses:
         '200':
-          description: Contraseña restablecida exitosamente
+          description: ContraseÃ±a restablecida exitosamente
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
         '400':
-          description: Token inválido, expirado o ya utilizado
+          description: Token invÃ¡lido, expirado o ya utilizado
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                message: El token de recuperación es inválido o ha expirado.
+                message: El token de recuperaciÃ³n es invÃ¡lido o ha expirado.
                 error: token_invalido
         '422':
-          description: La nueva contraseña no cumple los requisitos
+          description: La nueva contraseÃ±a no cumple los requisitos
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                message: La contraseña no cumple los requisitos de seguridad.
+                message: La contraseÃ±a no cumple los requisitos de seguridad.
                 error: password_invalida
 
   /api/v1/users:
@@ -213,7 +213,7 @@ paths:
         Requiere rol ADMINISTRADOR.
         Si el usuario tiene debe_cambiar_password = true, el acceso a este endpoint
         es bloqueado por MustChangePasswordMiddleware con error 403.
-        Retorna la lista completa de usuarios incluyendo sede y tipo de vehículo.
+        Retorna la lista completa de usuarios incluyendo sede y tipo de vehÃ­culo.
       security:
         - bearerAuth: []
       responses:
@@ -226,13 +226,13 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Rol insuficiente o cambio de contraseña obligatorio pendiente
+          description: Rol insuficiente o cambio de contraseÃ±a obligatorio pendiente
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                message: Debe cambiar su contraseña antes de continuar
+                message: Debe cambiar su contraseÃ±a antes de continuar
                 error: cambio_password_requerido
 
     post:
@@ -240,8 +240,8 @@ paths:
       summary: Crear usuario
       description: |
         Requiere rol ADMINISTRADOR.
-        Genera una contraseña temporal segura de 12 caracteres y la envía por correo electrónico.
-        Si el envío SMTP falla, el usuario se crea igualmente (retorna correo_enviado: false).
+        Genera una contraseÃ±a temporal segura de 12 caracteres y la envÃ­a por correo electrÃ³nico.
+        Si el envÃ­o SMTP falla, el usuario se crea igualmente (retorna correo_enviado: false).
       security:
         - bearerAuth: []
       requestBody:
@@ -264,13 +264,13 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '409':
-          description: Correo electrónico o DNI ya registrado
+          description: Correo electrÃ³nico o DNI ya registrado
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               example:
-                message: Ya existe un usuario con ese correo electrónico.
+                message: Ya existe un usuario con ese correo electrÃ³nico.
                 error: correo_duplicado
         '422':
           $ref: '#/components/responses/ValidationError'
@@ -334,11 +334,11 @@ paths:
 
   /api/v1/geography:
     get:
-      tags: [Catálogos]
-      summary: Obtener catálogo de geografía (Departamentos, Provincias y Distritos)
+      tags: [CatÃ¡logos]
+      summary: Obtener catÃ¡logo de geografÃ­a (Departamentos, Provincias y Distritos)
       responses:
         '200':
-          description: Estructura geográfica
+          description: Estructura geogrÃ¡fica
           content:
             application/json:
               schema:
@@ -351,7 +351,7 @@ paths:
 
   /api/v1/sedes:
     get:
-      tags: [Catálogos]
+      tags: [CatÃ¡logos]
       summary: Listar sedes operativas activas
       responses:
         '200':
@@ -389,11 +389,11 @@ paths:
 
   /api/v1/vehicle-types:
     get:
-      tags: [Catálogos]
-      summary: Listar tipos de vehículos
+      tags: [CatÃ¡logos]
+      summary: Listar tipos de vehÃ­culos
       responses:
         '200':
-          description: Lista de tipos de vehículos con capacidades
+          description: Lista de tipos de vehÃ­culos con capacidades
           content:
             application/json:
               schema:
@@ -417,7 +417,7 @@ paths:
 
   /api/v1/failure-reasons:
     get:
-      tags: [Catálogos]
+      tags: [CatÃ¡logos]
       summary: Listar motivos de fallos de entrega
       responses:
         '200':
@@ -441,13 +441,13 @@ paths:
 
   /api/v1/packages:
     get:
-      tags: [Paquetes (próximamente)]
+      tags: [Paquetes (prÃ³ximamente)]
       summary: '[Pendiente] Listar paquetes'
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
     post:
-      tags: [Paquetes (próximamente)]
+      tags: [Paquetes (prÃ³ximamente)]
       summary: '[Pendiente] Crear paquete'
       responses:
         '501':
@@ -455,7 +455,7 @@ paths:
 
   /api/v1/packages/{id}:
     get:
-      tags: [Paquetes (próximamente)]
+      tags: [Paquetes (prÃ³ximamente)]
       summary: '[Pendiente] Consultar paquete por ID'
       parameters:
         - $ref: '#/components/parameters/PackageId'
@@ -465,7 +465,7 @@ paths:
 
   /api/v1/packages/{id}/history:
     get:
-      tags: [Paquetes (próximamente)]
+      tags: [Paquetes (prÃ³ximamente)]
       summary: '[Pendiente] Historial del paquete'
       parameters:
         - $ref: '#/components/parameters/PackageId'
@@ -475,13 +475,13 @@ paths:
 
   /api/v1/batches:
     get:
-      tags: [Lotes (próximamente)]
+      tags: [Lotes (prÃ³ximamente)]
       summary: '[Pendiente] Listar lotes'
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
     post:
-      tags: [Lotes (próximamente)]
+      tags: [Lotes (prÃ³ximamente)]
       summary: '[Pendiente] Crear lote'
       responses:
         '501':
@@ -489,7 +489,7 @@ paths:
 
   /api/v1/batches/{id}:
     get:
-      tags: [Lotes (próximamente)]
+      tags: [Lotes (prÃ³ximamente)]
       summary: '[Pendiente] Consultar lote'
       parameters:
         - $ref: '#/components/parameters/BatchId'
@@ -499,7 +499,7 @@ paths:
 
   /api/v1/batches/{id}/assignment:
     patch:
-      tags: [Lotes (próximamente)]
+      tags: [Lotes (prÃ³ximamente)]
       summary: '[Pendiente] Asignar lote'
       parameters:
         - $ref: '#/components/parameters/BatchId'
@@ -509,7 +509,7 @@ paths:
 
   /api/v1/me/batches:
     get:
-      tags: [Conductor (próximamente)]
+      tags: [Conductor (prÃ³ximamente)]
       summary: '[Pendiente] Consultar lotes del conductor'
       responses:
         '501':
@@ -517,7 +517,7 @@ paths:
 
   /api/v1/me/packages:
     get:
-      tags: [Conductor (próximamente)]
+      tags: [Conductor (prÃ³ximamente)]
       summary: '[Pendiente] Consultar paquetes del conductor'
       responses:
         '501':
@@ -525,7 +525,7 @@ paths:
 
   /api/v1/batches/{id}/start-route:
     post:
-      tags: [Conductor (próximamente)]
+      tags: [Conductor (prÃ³ximamente)]
       summary: '[Pendiente] Iniciar ruta de un lote'
       parameters:
         - $ref: '#/components/parameters/BatchId'
@@ -535,7 +535,7 @@ paths:
 
   /api/v1/packages/{id}/deliver:
     post:
-      tags: [Entregas (próximamente)]
+      tags: [Entregas (prÃ³ximamente)]
       summary: '[Pendiente] Registrar entrega de un paquete'
       parameters:
         - $ref: '#/components/parameters/PackageId'
@@ -545,7 +545,7 @@ paths:
 
   /api/v1/packages/{id}/fail:
     post:
-      tags: [Entregas (próximamente)]
+      tags: [Entregas (prÃ³ximamente)]
       summary: '[Pendiente] Registrar entrega fallida'
       parameters:
         - $ref: '#/components/parameters/PackageId'
@@ -555,7 +555,7 @@ paths:
 
   /api/v1/tracking/{trackingId}:
     get:
-      tags: [Seguimiento (próximamente)]
+      tags: [Seguimiento (prÃ³ximamente)]
       summary: '[Pendiente] Consultar seguimiento'
       parameters:
         - $ref: '#/components/parameters/TrackingId'
@@ -565,21 +565,21 @@ paths:
 
   /api/v1/dashboard/metrics:
     get:
-      tags: [Dashboard (próximamente)]
-      summary: '[Pendiente] Consultar métricas del dashboard'
+      tags: [Dashboard (prÃ³ximamente)]
+      summary: '[Pendiente] Consultar mÃ©tricas del dashboard'
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
 
   /api/v1/zones:
     get:
-      tags: [Zonas (próximamente)]
+      tags: [Zonas (prÃ³ximamente)]
       summary: '[Pendiente] Listar zonas'
       responses:
         '501':
           $ref: '#/components/responses/NotImplemented'
     post:
-      tags: [Zonas (próximamente)]
+      tags: [Zonas (prÃ³ximamente)]
       summary: '[Pendiente] Crear zona'
       responses:
         '501':
@@ -613,28 +613,28 @@ components:
       required: true
       schema:
         type: string
-      description: Código de seguimiento
+      description: CÃ³digo de seguimiento
 
   responses:
     NotImplemented:
-      description: Endpoint registrado, pero su funcionalidad aún no está implementada
+      description: Endpoint registrado, pero su funcionalidad aÃºn no estÃ¡ implementada
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/MessageResponse'
           example:
-            message: Endpoint aún no implementado
+            message: Endpoint aÃºn no implementado
     BadRequest:
-      description: Solicitud inválida
+      description: Solicitud invÃ¡lida
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
-            message: Solicitud inválida.
+            message: Solicitud invÃ¡lida.
             error: solicitud_invalida
     Unauthorized:
-      description: Token inválido, ausente o credenciales incorrectas
+      description: Token invÃ¡lido, ausente o credenciales incorrectas
       content:
         application/json:
           schema:
@@ -643,7 +643,7 @@ components:
             message: Credenciales incorrectas
             error: credenciales_incorrectas
     Forbidden:
-      description: Acceso no autorizado o acción no permitida
+      description: Acceso no autorizado o acciÃ³n no permitida
       content:
         application/json:
           schema:
@@ -652,13 +652,13 @@ components:
             message: Acceso no autorizado
             error: acceso_no_autorizado
     ValidationError:
-      description: Datos de entrada con formato inválido
+      description: Datos de entrada con formato invÃ¡lido
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           example:
-            message: Los datos enviados no son válidos.
+            message: Los datos enviados no son vÃ¡lidos.
             error: validacion_fallida
 
   schemas:
@@ -681,7 +681,7 @@ components:
       properties:
         token:
           type: string
-          description: JWT emitido para autenticación.
+          description: JWT emitido para autenticaciÃ³n.
         token_type:
           type: string
           example: Bearer
@@ -711,7 +711,7 @@ components:
       properties:
         message:
           type: string
-          example: Contraseña actualizada exitosamente
+          example: ContraseÃ±a actualizada exitosamente
         token:
           type: string
           description: Nuevo JWT emitido para reemplazar el anterior.
@@ -909,7 +909,7 @@ components:
       properties:
         message:
           type: string
-          example: Operación realizada exitosamente
+          example: OperaciÃ³n realizada exitosamente
 
     ErrorResponse:
       type: object
