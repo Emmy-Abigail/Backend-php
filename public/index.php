@@ -19,6 +19,7 @@ use App\Infrastructure\Adapter\In\Http\Action\Auth\ConfirmPasswordResetAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\LoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\MeAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\RequestPasswordResetAction;
+use App\Infrastructure\Adapter\In\Http\Action\Auth\SessionStatusAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetFailureReasonsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetGeographyAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetSedesAction;
@@ -58,6 +59,7 @@ $authenticateTokenService = new AuthenticateTokenService($tokenService, $userRep
 $jwtAuthMiddleware = new JwtAuthMiddleware($authenticateTokenService);
 $adminRoleMiddleware = new RoleMiddleware('ADMINISTRADOR', 'Admin');
 $meAction = new MeAction();
+$sessionStatusAction = new SessionStatusAction();
 $changePasswordAction = new ChangePasswordAction(
     new ChangePasswordService($userRepository),
 );
@@ -97,6 +99,7 @@ $registerAuthRoutes(
     $app,
     $loginAction,
     $meAction,
+    $sessionStatusAction,
     $changePasswordAction,
     $requestPasswordResetAction,
     $confirmPasswordResetAction,

@@ -42,6 +42,7 @@ El sistema requiere las siguientes variables de entorno configuradas en el archi
 1. **Inicio de sesión:** El cliente realiza una solicitud `POST /api/v1/auth/login` con sus credenciales (`correo` y `password`).
 2. **Emisión del token:** La API verifica las credenciales y devuelve un token JWT con vigencia de 8 horas (`expires_at` en formato ISO 8601) junto con los datos del usuario autenticado.
 3. **Uso del token:** En solicitudes subsecuentes a endpoints protegidos, el cliente debe incluir la cabecera HTTP `Authorization: Bearer <token>`.
+4. **Polling de sesión:** Mientras haya sesión abierta, el cliente consulta periódicamente `GET /api/v1/auth/session`. Responde `204` si la sesión sigue vigente y `401` si el token expiró o un administrador desactivó al usuario; ante un `401` el cliente debe borrar el token y volver al login.
 
 ### Ejemplo con curl
 
