@@ -26,6 +26,8 @@ interface UserRepository
 
     public function existsByDni(string $dni): bool;
 
+    public function existsByPlaca(string $placa): bool;
+
     public function create(
         string $names,
         string $dni,
@@ -35,6 +37,7 @@ interface UserRepository
         string $role,
         ?int $idSede,
         ?int $idTipoVehiculo,
+        ?string $placa = null,
     ): User;
 
     public function deleteById(int $userId): void;

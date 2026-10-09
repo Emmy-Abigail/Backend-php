@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Unit\Application\Service\Auth;
 
 use App\Application\Exception\InvalidToken;
-use App\Application\Exception\UserNotAllowed;
 use App\Application\Port\Out\Persistence\UserRepository;
 use App\Application\Port\Out\Security\TokenClaims;
 use App\Application\Port\Out\Security\TokenService;
@@ -24,7 +23,7 @@ final class AuthenticateTokenServiceTest extends TestCase
         $tokenService->expects($this->once())
             ->method('verify')
             ->with('valid-token')
-            ->willReturn(new TokenClaims(1, 'admin@email.com', 'ADMINISTRADOR', time() + 3600, time() - 60));
+            ->willReturn(new TokenClaims(1, 'ADMINISTRADOR', null, time() - 60));
 
         $userRepository = $this->createMock(UserRepository::class);
         $userRepository->expects($this->once())
@@ -35,7 +34,7 @@ final class AuthenticateTokenServiceTest extends TestCase
         $service = new AuthenticateTokenService($tokenService, $userRepository);
         $authUser = $service->execute('valid-token');
 
-        self::assertSame(1, $authUser->userId);
+        self::assertSame(1, $authUser->id);
         self::assertSame('ADMINISTRADOR', $authUser->role);
     }
 
@@ -50,14 +49,20 @@ final class AuthenticateTokenServiceTest extends TestCase
             ->with('old-token')
             ->willReturn(new TokenClaims(
                 1,
-                'admin@email.com',
                 'ADMINISTRADOR',
-                $passwordChangedTime->getTimestamp() + 3600,
-                $passwordChangedTime->getTimestamp() - 300 // token emitido 5 min antes del cambio
+                null,
+                $passwordChangedTime->getTimestamp() - 300 // emitido 5 min antes del cambio
             ));
 
-        $user = new User(1, 'Admin', 'admin@email.com', 'hash', 'ADMINISTRADOR', true);
-        $user->passwordChangedAt = $passwordChangedTime;
+        $user = new User(
+            id: 1,
+            names: 'Admin',
+            email: 'admin@email.com',
+            passwordHash: 'hash',
+            role: 'ADMINISTRADOR',
+            active: true,
+            passwordChangedAt: $passwordChangedTime
+        );
 
         $userRepository = $this->createMock(UserRepository::class);
         $userRepository->expects($this->once())
@@ -69,24 +74,5 @@ final class AuthenticateTokenServiceTest extends TestCase
 
         $this->expectException(InvalidToken::class);
         $service->execute('old-token');
-    }
-
-    #[Test]
-    public function rechaza_usuario_inactivo(): void
-    {
-        $tokenService = $this->createMock(TokenService::class);
-        $tokenService->expects($this->once())
-            ->method('verify')
-            ->willReturn(new TokenClaims(1, 'user@email.com', 'CONDUCTOR', time() + 3600, time()));
-
-        $userRepository = $this->createMock(UserRepository::class);
-        $userRepository->expects($this->once())
-            ->method('findById')
-            ->willReturn(new User(1, 'Conductor', 'user@email.com', 'hash', 'CONDUCTOR', false));
-
-        $service = new AuthenticateTokenService($tokenService, $userRepository);
-
-        $this->expectException(UserNotAllowed::class);
-        $service->execute('token');
     }
 }

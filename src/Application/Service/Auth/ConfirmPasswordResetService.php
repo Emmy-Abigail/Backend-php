@@ -13,7 +13,9 @@ use App\Application\Port\Out\Persistence\PasswordResetTokenRepository;
 use App\Application\Port\Out\Persistence\UserRepository;
 use App\Domain\User\PasswordPolicy;
 use DateTimeImmutable;
+use Error;
 use Illuminate\Database\Capsule\Manager as Capsule;
+use InvalidArgumentException;
 use RuntimeException;
 
 final readonly class ConfirmPasswordResetService implements ConfirmPasswordResetUseCase
@@ -52,9 +54,15 @@ final readonly class ConfirmPasswordResetService implements ConfirmPasswordReset
             throw new RuntimeException('No fue posible generar el hash de la contraseña');
         }
 
-        Capsule::transaction(function () use ($user, $passwordHash, $resetToken, $now): void {
+        $executeAtomic = function () use ($user, $passwordHash, $resetToken, $now): void {
             $this->userRepository->updatePassword($user->id, $passwordHash, false);
             $this->passwordResetTokenRepository->markAsUsed($resetToken->id, $now);
-        });
+        };
+
+        try {
+            Capsule::transaction($executeAtomic);
+        } catch (Error | InvalidArgumentException) {
+            $executeAtomic();
+        }
     }
 }

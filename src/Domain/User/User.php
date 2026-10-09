@@ -21,6 +21,7 @@ final readonly class User
         public ?int $idSede = null,
         public ?int $idTipoVehiculo = null,
         public ?DateTimeImmutable $passwordChangedAt = null,
+        public ?string $placa = null,
     ) {
     }
 

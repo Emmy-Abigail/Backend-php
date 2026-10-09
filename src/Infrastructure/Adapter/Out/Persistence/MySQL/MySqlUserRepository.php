@@ -6,18 +6,19 @@ namespace App\Infrastructure\Adapter\Out\Persistence\MySQL;
 
 use App\Application\Exception\DniAlreadyExists;
 use App\Application\Exception\EmailAlreadyExists;
+use App\Application\Exception\PlacaAlreadyExists;
 use App\Application\Port\Out\Persistence\UserRepository;
 use App\Domain\User\User;
 use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Database\QueryException;
 
-final class MySqlUserRepository implements UserRepository
+final readonly class MySqlUserRepository implements UserRepository
 {
     public function findByEmail(string $email): ?User
     {
         $record = UserRecord::query()
-            ->where('correo', $email)
+            ->where('correo', strtolower(trim($email)))
             ->first();
 
         if ($record === null) {
@@ -80,6 +81,7 @@ final class MySqlUserRepository implements UserRepository
                 'usuarios.activo',
                 'usuarios.id_sede',
                 'usuarios.id_tipo_vehiculo',
+                'usuarios.placa',
                 'sedes.nombre as sede_nombre',
                 'tipos_vehiculo.nombre as tipo_vehiculo_nombre',
             ])
@@ -105,6 +107,7 @@ final class MySqlUserRepository implements UserRepository
                 'activo' => (bool) $row->activo,
                 'id_sede' => $row->id_sede !== null ? (int) $row->id_sede : null,
                 'id_tipo_vehiculo' => $row->id_tipo_vehiculo !== null ? (int) $row->id_tipo_vehiculo : null,
+                'placa' => $row->placa !== null ? (string) $row->placa : null,
                 'sede_nombre' => $row->sede_nombre !== null ? (string) $row->sede_nombre : null,
                 'tipo_vehiculo' => $row->tipo_vehiculo_nombre !== null ? (string) $row->tipo_vehiculo_nombre : null,
             ];
@@ -123,6 +126,11 @@ final class MySqlUserRepository implements UserRepository
         return UserRecord::query()->where('dni', $dni)->exists();
     }
 
+    public function existsByPlaca(string $placa): bool
+    {
+        return UserRecord::query()->where('placa', $placa)->exists();
+    }
+
     public function create(
         string $names,
         string $dni,
@@ -132,6 +140,7 @@ final class MySqlUserRepository implements UserRepository
         string $role,
         ?int $idSede,
         ?int $idTipoVehiculo,
+        ?string $placa = null,
     ): User {
         try {
             $record = UserRecord::query()->create([
@@ -143,6 +152,7 @@ final class MySqlUserRepository implements UserRepository
                 'rol' => $role,
                 'id_sede' => $idSede,
                 'id_tipo_vehiculo' => $idTipoVehiculo,
+                'placa' => $placa,
                 'debe_cambiar_password' => true,
                 'activo' => true,
             ]);
@@ -153,6 +163,10 @@ final class MySqlUserRepository implements UserRepository
 
             if ($exception->getCode() === '23000' && str_contains($exception->getMessage(), 'uq_usuarios_dni')) {
                 throw new DniAlreadyExists('Ya existe un usuario con ese DNI', 0, $exception);
+            }
+
+            if ($exception->getCode() === '23000' && str_contains($exception->getMessage(), 'uq_usuarios_placa')) {
+                throw new PlacaAlreadyExists('Ya existe un conductor con esa placa', 0, $exception);
             }
 
             throw $exception;
@@ -168,7 +182,7 @@ final class MySqlUserRepository implements UserRepository
             ->update([
                 'password_hash' => $newPasswordHash,
                 'debe_cambiar_password' => $mustChangePassword,
-                'password_changed_at' => gmdate('Y-m-d H:i:s'),
+                'password_changed_at' => (new DateTimeImmutable('now', new DateTimeZone('UTC')))->format('Y-m-d H:i:s'),
             ]);
     }
 
@@ -176,7 +190,9 @@ final class MySqlUserRepository implements UserRepository
     {
         UserRecord::query()
             ->where('id', $userId)
-            ->update(['activo' => $active]);
+            ->update([
+                'activo' => $active,
+            ]);
     }
 
     public function deleteById(int $userId): void
@@ -205,6 +221,7 @@ final class MySqlUserRepository implements UserRepository
             $record->getAttribute('id_sede') === null ? null : (int) $record->getAttribute('id_sede'),
             $record->getAttribute('id_tipo_vehiculo') === null ? null : (int) $record->getAttribute('id_tipo_vehiculo'),
             $passwordChangedAt,
+            $record->getAttribute('placa') === null ? null : (string) $record->getAttribute('placa'),
         );
     }
 }

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Unit\Infrastructure\Adapter\In\Http\Action\User;
 
 use App\Application\Exception\EmailAlreadyExists;
+use App\Application\Exception\InvalidPlacaFormat;
+use App\Application\Exception\PlacaAlreadyExists;
 use App\Application\Port\In\User\CreateUserCommand;
 use App\Application\Port\In\User\CreateUserResult;
 use App\Application\Port\In\User\CreateUserUseCase;
@@ -30,8 +32,33 @@ final class CreateUserActionTest extends TestCase
         return (new ResponseFactory())->createResponse();
     }
 
+    /**
+     * @param array<string, mixed> $overrides
+     * @return array<string, mixed>
+     */
+    private function conductorBody(array $overrides = []): array
+    {
+        return array_merge([
+            'nombres' => 'Juan Pérez',
+            'dni' => '12345678',
+            'correo' => 'juan@email.com',
+            'telefono' => '999888777',
+            'rol' => 'CONDUCTOR',
+            'id_tipo_vehiculo' => 2, // 2 = AUTO
+            'placa' => 'ABC-123',
+        ], $overrides);
+    }
+
+    private function useCaseThatNeverRuns(): CreateUserUseCase
+    {
+        $useCase = $this->createMock(CreateUserUseCase::class);
+        $useCase->expects($this->never())->method('execute');
+
+        return $useCase;
+    }
+
     #[Test]
-    public function crea_usuario_conductor_con_datos_validos(): void
+    public function crea_conductor_auto_normalizando_correo_telefono_y_placa(): void
     {
         $useCase = $this->createMock(CreateUserUseCase::class);
         $useCase->expects($this->once())
@@ -41,18 +68,18 @@ final class CreateUserActionTest extends TestCase
                 && $command->email === 'juan@email.com'
                 && $command->phone === '999888777'
                 && $command->role === 'CONDUCTOR'
-                && $command->idTipoVehiculo === 1))
-            ->willReturn(new CreateUserResult(2, 'Juan Pérez', '12345678', 'juan@email.com', '999888777', 'CONDUCTOR', null, 1, 'ClaveTemp123@', true));
+                && $command->idSede === null
+                && $command->idTipoVehiculo === 2
+                && $command->placa === 'ABC123'))
+            ->willReturn(new CreateUserResult(2, 'Juan Pérez', '12345678', 'juan@email.com', 'CONDUCTOR', null, 2, 'ClaveTemp123@', true, 'ABC123'));
 
         $response = (new CreateUserAction($useCase))(
-            $this->request([
+            $this->request($this->conductorBody([
                 'nombres' => '  Juan Pérez  ',
-                'dni' => '12345678',
                 'correo' => ' JUAN@EMAIL.COM ',
                 'telefono' => ' 999888777 ',
-                'rol' => 'CONDUCTOR',
-                'id_tipo_vehiculo' => 1,
-            ]),
+                'placa' => ' abc-123 ',
+            ])),
             $this->response(),
         );
 
@@ -60,34 +87,94 @@ final class CreateUserActionTest extends TestCase
         $body = json_decode((string) $response->getBody(), true);
         self::assertSame('Juan Pérez', $body['nombres']);
         self::assertSame('12345678', $body['dni']);
+        self::assertSame('ABC123', $body['placa']);
         self::assertTrue($body['correo_enviado']);
     }
 
     #[Test]
-    public function rechaza_nombre_o_telefono_mas_largo_que_la_columna(): void
+    public function crea_conductor_motorizado_con_placa_de_moto(): void
     {
         $useCase = $this->createMock(CreateUserUseCase::class);
-        $useCase->expects($this->never())->method('execute');
-        $action = new CreateUserAction($useCase);
+        $useCase->expects($this->once())
+            ->method('execute')
+            ->with($this->callback(static fn (CreateUserCommand $command): bool => $command->idTipoVehiculo === 1
+                && $command->placa === 'AB5555'))
+            ->willReturn(new CreateUserResult(3, 'Carlos Moto', '87654321', 'carlos@email.com', 'CONDUCTOR', null, 1, 'ClaveTemp123@', true, 'AB5555'));
 
-        $nameResponse = $action($this->request([
-            'nombres' => str_repeat('a', 151),
-            'dni' => '12345678',
-            'correo' => 'usuario@email.com',
-            'rol' => 'CONDUCTOR',
-            'id_tipo_vehiculo' => 1,
-        ]), $this->response());
-        self::assertSame(422, $nameResponse->getStatusCode());
+        $response = (new CreateUserAction($useCase))(
+            $this->request($this->conductorBody([
+                'id_tipo_vehiculo' => 1,
+                'placa' => 'AB-5555',
+            ])),
+            $this->response(),
+        );
 
-        $phoneResponse = $action($this->request([
-            'nombres' => 'Usuario',
-            'dni' => '12345678',
-            'correo' => 'usuario@email.com',
-            'telefono' => str_repeat('1', 21),
-            'rol' => 'CONDUCTOR',
-            'id_tipo_vehiculo' => 1,
+        self::assertSame(201, $response->getStatusCode());
+    }
+
+    #[Test]
+    public function rechaza_dni_que_no_tenga_8_digitos_numericos(): void
+    {
+        $action = new CreateUserAction($this->useCaseThatNeverRuns());
+
+        foreach (['1234567', '123456789', '1234567A', ''] as $dni) {
+            $response = $action($this->request($this->conductorBody(['dni' => $dni])), $this->response());
+            self::assertSame(422, $response->getStatusCode());
+        }
+    }
+
+    #[Test]
+    public function rechaza_telefono_que_no_tenga_9_digitos_o_no_empiece_con_9(): void
+    {
+        $action = new CreateUserAction($this->useCaseThatNeverRuns());
+
+        foreach (['99988877', '9998887771', '899888777', '99988877a'] as $phone) {
+            $response = $action($this->request($this->conductorBody(['telefono' => $phone])), $this->response());
+            self::assertSame(422, $response->getStatusCode());
+        }
+    }
+
+    #[Test]
+    public function convierte_el_formato_de_placa_invalido_en_422(): void
+    {
+        // El formato según tipo de vehículo ahora lo valida CreateUserService (Domain/PlacaPolicy),
+        // no la Action — aquí solo verificamos que la Action traduzca esa excepción a 422.
+        $useCase = $this->createStub(CreateUserUseCase::class);
+        $useCase->method('execute')->willThrowException(new InvalidPlacaFormat());
+
+        $response = (new CreateUserAction($useCase))($this->request($this->conductorBody(['id_tipo_vehiculo' => 1, 'placa' => 'ABC-123'])), $this->response());
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertSame('placa_invalida', json_decode((string) $response->getBody(), true)['error']);
+    }
+
+    #[Test]
+    public function rechaza_placa_para_operador(): void
+    {
+        $action = new CreateUserAction($this->useCaseThatNeverRuns());
+
+        $response = $action($this->request([
+            'nombres' => 'Operador',
+            'dni' => '87654321',
+            'correo' => 'operador@email.com',
+            'rol' => 'OPERADOR',
+            'id_sede' => 1,
+            'placa' => 'ABC-123',
         ]), $this->response());
-        self::assertSame(422, $phoneResponse->getStatusCode());
+
+        self::assertSame(422, $response->getStatusCode());
+    }
+
+    #[Test]
+    public function convierte_la_placa_duplicada_en_conflicto(): void
+    {
+        $useCase = $this->createStub(CreateUserUseCase::class);
+        $useCase->method('execute')->willThrowException(new PlacaAlreadyExists());
+
+        $response = (new CreateUserAction($useCase))($this->request($this->conductorBody()), $this->response());
+
+        self::assertSame(409, $response->getStatusCode());
+        self::assertSame('placa_duplicada', json_decode((string) $response->getBody(), true)['error']);
     }
 
     #[Test]
@@ -96,17 +183,9 @@ final class CreateUserActionTest extends TestCase
         $useCase = $this->createStub(CreateUserUseCase::class);
         $useCase->method('execute')->willThrowException(new EmailAlreadyExists());
 
-        $response = (new CreateUserAction($useCase))(
-            $this->request([
-                'nombres' => 'Usuario',
-                'dni' => '12345678',
-                'correo' => 'usuario@email.com',
-                'rol' => 'CONDUCTOR',
-                'id_tipo_vehiculo' => 1,
-            ]),
-            $this->response(),
-        );
+        $response = (new CreateUserAction($useCase))($this->request($this->conductorBody()), $this->response());
 
         self::assertSame(409, $response->getStatusCode());
+        self::assertSame('correo_duplicado', json_decode((string) $response->getBody(), true)['error']);
     }
 }

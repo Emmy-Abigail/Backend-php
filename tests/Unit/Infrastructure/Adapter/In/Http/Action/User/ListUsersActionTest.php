@@ -31,7 +31,8 @@ final class ListUsersActionTest extends TestCase
                 null,
                 1,
                 null,
-                'Furgoneta',
+                'Motorizado',
+                'AB5555',
             ),
         ]));
 
@@ -49,11 +50,12 @@ final class ListUsersActionTest extends TestCase
                 'dni' => '12345678',
                 'telefono' => '999888777',
                 'rol' => 'CONDUCTOR',
+                'activo' => true,
                 'id_sede' => null,
                 'id_tipo_vehiculo' => 1,
                 'sede_nombre' => null,
-                'tipo_vehiculo' => 'Furgoneta',
-                'activo' => true,
+                'tipo_vehiculo' => 'Motorizado',
+                'placa' => 'AB5555',
             ]],
         ], json_decode((string) $response->getBody(), true));
     }

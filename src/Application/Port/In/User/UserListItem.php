@@ -18,6 +18,7 @@ final readonly class UserListItem
         public ?int $idTipoVehiculo = null,
         public ?string $sedeNombre = null,
         public ?string $tipoVehiculo = null,
+        public ?string $placa = null,
     ) {
     }
 }

@@ -56,6 +56,7 @@ final readonly class ListUsersAction
                     'id_tipo_vehiculo' => $user->idTipoVehiculo,
                     'sede_nombre' => $user->sedeNombre,
                     'tipo_vehiculo' => $user->tipoVehiculo,
+                    'placa' => $user->placa,
                 ],
                 $result->users,
             ),
