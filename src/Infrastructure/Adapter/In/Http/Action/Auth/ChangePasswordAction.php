@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Infrastructure\Adapter\In\Http\Action\Auth;
 
 use App\Application\Exception\InvalidCurrentPassword;
+use App\Application\Exception\MissingCurrentPassword;
 use App\Application\Exception\SamePasswordException;
 use App\Application\Exception\UserNotAllowed;
 use App\Application\Exception\WeakPasswordException;
@@ -39,14 +40,16 @@ final readonly class ChangePasswordAction
         $currentPassword = $body['password_actual'] ?? $body['current_password'] ?? null;
         $newPassword = $body['password_nuevo'] ?? $body['nueva_password'] ?? $body['new_password'] ?? null;
 
-        if (!is_string($currentPassword) || !is_string($newPassword) || $currentPassword === '' || $newPassword === '') {
-            return $this->json($response, ['message' => 'Los campos password_actual y password_nuevo son obligatorios', 'error' => 'campos_obligatorios'], 400);
+        if (!is_string($newPassword) || $newPassword === '') {
+            return $this->json($response, ['message' => 'El campo password_nuevo es obligatorio', 'error' => 'campos_obligatorios'], 400);
         }
 
         try {
             $result = $this->changePasswordUseCase->execute(
-                new ChangePasswordCommand($authUser->id, $currentPassword, $newPassword)
+                new ChangePasswordCommand($authUser->id, is_string($currentPassword) ? $currentPassword : null, $newPassword)
             );
+        } catch (MissingCurrentPassword) {
+            return $this->json($response, ['message' => 'El campo password_actual es obligatorio', 'error' => 'campos_obligatorios'], 400);
         } catch (UserNotAllowed) {
             return $this->json($response, ['message' => 'Usuario inactivo o inexistente', 'error' => 'usuario_inactivo'], 401);
         } catch (InvalidCurrentPassword) {

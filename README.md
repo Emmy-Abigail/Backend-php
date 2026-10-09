@@ -41,6 +41,10 @@ La seguridad de contraseÃ±as estÃ¡ centralizada en `src/Domain/User/Password
 
 ## 3. AutenticaciÃ³n y Control de SesiÃ³n con JWT
 
+El [contrato de cambio de contraseña](docs/change-password.md) documenta el primer
+cambio obligatorio con solo `password_nuevo`, los cambios posteriores y el JWT
+nuevo que debe guardar el frontend.
+
 * **Manejo de tokens:** Firmados con HMAC-SHA256 (`HS256`) mediante `firebase/php-jwt`.
 * **Temporizador y ExpiraciÃ³n:**
   * **ConfiguraciÃ³n:** Variable `JWT_TTL_SECONDS=28800` (8 horas) en `.env`.
@@ -81,7 +85,7 @@ La seguridad de contraseÃ±as estÃ¡ centralizada en `src/Domain/User/Password
 * `GET /api/v1/vehicle-types` â€” Tipos de vehÃ­culo con pesos y dimensiones mÃ¡ximas.
 * `GET /api/v1/failure-reasons` â€” CatÃ¡logo estandarizado de motivos de fallo de entrega.
 
-### GestiÃ³n de Personal (Solo Administrador)
-* `POST /api/v1/users` â€” Alta de Conductor u Operador con contraseÃ±a temporal.
-* `GET /api/v1/users` â€” Listado de usuarios con filtros por rol y sede.
-* `PATCH /api/v1/users/{id}/status` â€” Activar o inhabilitar a un usuario.
+### Gestión de Personal (Solo Administrador)
+* `POST /api/v1/users` — Alta de Conductor u Operador con contraseña temporal.
+* `GET /api/v1/users` — Listado de usuarios con filtros por rol y sede.
+* `PATCH /api/v1/users/{id}/status` — Activar o inhabilitar a un usuario.

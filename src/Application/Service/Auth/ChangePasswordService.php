@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Application\Service\Auth;
 
 use App\Application\Exception\InvalidCurrentPassword;
+use App\Application\Exception\MissingCurrentPassword;
 use App\Application\Exception\SamePasswordException;
 use App\Application\Exception\UserNotAllowed;
 use App\Application\Exception\WeakPasswordException;
@@ -32,16 +33,22 @@ final readonly class ChangePasswordService implements ChangePasswordUseCase
             throw new UserNotAllowed();
         }
 
-        if (!$user->passwordMatches($command->currentPassword)) {
-            throw new InvalidCurrentPassword();
-        }
+        if (!$user->mustChangePassword) {
+            if ($command->currentPassword === null || $command->currentPassword === '') {
+                throw new MissingCurrentPassword();
+            }
 
-        if ($command->currentPassword === $command->newPassword) {
-            throw new SamePasswordException();
+            if (!$user->passwordMatches($command->currentPassword)) {
+                throw new InvalidCurrentPassword();
+            }
         }
 
         if (!PasswordPolicy::isValid($command->newPassword)) {
             throw new WeakPasswordException();
+        }
+
+        if ($user->passwordMatches($command->newPassword)) {
+            throw new SamePasswordException();
         }
 
         $newPasswordHash = password_hash($command->newPassword, PASSWORD_DEFAULT);
