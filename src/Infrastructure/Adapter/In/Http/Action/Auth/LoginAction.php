@@ -59,6 +59,16 @@ final readonly class LoginAction
             ];
         }
 
+        $vehiculo = null;
+        if ($result->role === 'CONDUCTOR' && $result->idTipoVehiculo !== null) {
+            $vehiculo = [
+                'id' => $result->idTipoVehiculo,
+                'nombre' => $result->tipoVehiculoNombre ?? 'Vehículo Asignado',
+                'peso_max_total_kg' => $result->pesoMaxTotalKg,
+                'lado_max_cm' => $result->ladoMaxCm,
+            ];
+        }
+
         $expiresAtLima = $result->expiresAt->setTimezone(new DateTimeZone('America/Lima'));
 
         return $this->json($response, [
@@ -72,6 +82,8 @@ final readonly class LoginAction
                 'rol' => $result->role,
                 'debe_cambiar_password' => $result->mustChangePassword,
                 'sede' => $sede,
+                'vehiculo' => $vehiculo,
+                'placa' => $result->placa,
             ],
         ]);
     }

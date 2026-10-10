@@ -23,6 +23,16 @@ final readonly class MeAction
             ];
         }
 
+        $vehiculo = null;
+        if ($authUser->role === 'CONDUCTOR' && $authUser->idTipoVehiculo !== null) {
+            $vehiculo = [
+                'id' => $authUser->idTipoVehiculo,
+                'nombre' => $authUser->tipoVehiculoNombre ?? 'Vehículo Asignado',
+                'peso_max_total_kg' => $authUser->pesoMaxTotalKg,
+                'lado_max_cm' => $authUser->ladoMaxCm,
+            ];
+        }
+
         return $this->json($response, [
             'user' => [
                 'id' => $authUser->id,
@@ -31,6 +41,8 @@ final readonly class MeAction
                 'rol' => $authUser->role,
                 'debe_cambiar_password' => $authUser->mustChangePassword,
                 'sede' => $sede,
+                'vehiculo' => $vehiculo,
+                'placa' => $authUser->placa,
             ],
         ]);
     }
