@@ -41,6 +41,10 @@ La seguridad de contraseÃ±as estÃ¡ centralizada en `src/Domain/User/Password
 
 ## 3. AutenticaciÃ³n y Control de SesiÃ³n con JWT
 
+El [contrato de cambio de contraseña](docs/change-password.md) documenta el primer
+cambio obligatorio con solo `password_nuevo`, los cambios posteriores y el JWT
+nuevo que debe guardar el frontend.
+
 * **Manejo de tokens:** Firmados con HMAC-SHA256 (`HS256`) mediante `firebase/php-jwt`.
 * **Temporizador y ExpiraciÃ³n:**
   * **ConfiguraciÃ³n:** Variable `JWT_TTL_SECONDS=28800` (8 horas) en `.env`.
@@ -61,6 +65,13 @@ La seguridad de contraseÃ±as estÃ¡ centralizada en `src/Domain/User/Password
   * Usuarios creados con contraseÃ±a temporal tienen `debe_cambiar_password = true`.
   * El middleware `MustChangePasswordMiddleware` bloquea cualquier acceso operativo con `403 Forbidden` (`"Debes cambiar tu contraseÃ±a"`), permitiendo Ãºnicamente acceder a `/auth/me` y a `/auth/change-password`.
 
+### Flujo de autenticación
+
+1. **Inicio de sesión:** El cliente realiza una solicitud `POST /api/v1/auth/login` con sus credenciales (`correo` y `password`).
+2. **Emisión del token:** La API verifica las credenciales y devuelve un token JWT con vigencia de 8 horas (`expires_at` en formato ISO 8601) junto con los datos del usuario autenticado.
+3. **Uso del token:** En solicitudes subsecuentes a endpoints protegidos, el cliente debe incluir la cabecera HTTP `Authorization: Bearer <token>`.
+4. **Polling de sesión:** Mientras haya sesión abierta, el cliente consulta periódicamente `GET /api/v1/auth/session`. Responde `204` si la sesión sigue vigente y `401` si el token expiró o un administrador desactivó al usuario; ante un `401` el cliente debe borrar el token y volver al login.
+
 ---
 
 ## 4. Endpoints Disponibles (Ã‰pica 1)
@@ -71,6 +82,7 @@ La seguridad de contraseÃ±as estÃ¡ centralizada en `src/Domain/User/Password
 ### AutenticaciÃ³n y Seguridad
 * `POST /api/v1/auth/login` â€” Iniciar sesiÃ³n (responde 401 `"Credenciales incorrectas"` en fallos).
 * `GET /api/v1/auth/me` â€” Datos del usuario autenticado (incluye sede para Operadores).
+* `GET /api/v1/auth/session` — Comprobar sesión vigente: `204` si es válida; `401` si expiró, es inválida o el usuario fue desactivado.
 * `PATCH /api/v1/auth/change-password` â€” Cambio de contraseÃ±a (emite nuevo JWT).
 * `POST /api/v1/auth/password-reset/request` â€” Solicitud de recuperaciÃ³n por correo.
 * `POST /api/v1/auth/password-reset/confirm` â€” Restablecimiento de contraseÃ±a con token.
@@ -81,7 +93,7 @@ La seguridad de contraseÃ±as estÃ¡ centralizada en `src/Domain/User/Password
 * `GET /api/v1/vehicle-types` â€” Tipos de vehÃ­culo con pesos y dimensiones mÃ¡ximas.
 * `GET /api/v1/failure-reasons` â€” CatÃ¡logo estandarizado de motivos de fallo de entrega.
 
-### GestiÃ³n de Personal (Solo Administrador)
-* `POST /api/v1/users` â€” Alta de Conductor u Operador con contraseÃ±a temporal.
-* `GET /api/v1/users` â€” Listado de usuarios con filtros por rol y sede.
-* `PATCH /api/v1/users/{id}/status` â€” Activar o inhabilitar a un usuario.
+### Gestión de Personal (Solo Administrador)
+* `POST /api/v1/users` — Alta de Conductor u Operador con contraseña temporal.
+* `GET /api/v1/users` — Listado de usuarios con filtros por rol y sede.
+* `PATCH /api/v1/users/{id}/status` — Activar o inhabilitar a un usuario.
