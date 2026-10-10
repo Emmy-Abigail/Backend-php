@@ -39,6 +39,20 @@ final readonly class LoginService implements LoginUseCase
             }
         }
 
+        $tipoVehiculoNombre = null;
+        $pesoMaxTotalKg = null;
+        $ladoMaxCm = null;
+        if ($user->role === 'CONDUCTOR' && $user->idTipoVehiculo !== null && $this->catalogRepository !== null) {
+            foreach ($this->catalogRepository->getVehicleTypes() as $tipoVehiculo) {
+                if ($tipoVehiculo->id === $user->idTipoVehiculo) {
+                    $tipoVehiculoNombre = $tipoVehiculo->nombre;
+                    $pesoMaxTotalKg = $tipoVehiculo->pesoMaxTotalKg;
+                    $ladoMaxCm = $tipoVehiculo->ladoMaxCm;
+                    break;
+                }
+            }
+        }
+
         $issuedToken = $this->tokenService->issue($user);
 
         return new LoginResult(
@@ -52,6 +66,11 @@ final readonly class LoginService implements LoginUseCase
             $user->mustChangePassword,
             $user->idSede,
             $sedeNombre,
+            $user->idTipoVehiculo,
+            $tipoVehiculoNombre,
+            $pesoMaxTotalKg,
+            $ladoMaxCm,
+            $user->placa,
         );
     }
 }

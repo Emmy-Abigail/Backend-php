@@ -14,6 +14,11 @@ final readonly class AuthenticatedUser
         public bool $mustChangePassword = false,
         public ?int $idSede = null,
         public ?string $sedeNombre = null,
+        public ?int $idTipoVehiculo = null,
+        public ?string $tipoVehiculoNombre = null,
+        public ?float $pesoMaxTotalKg = null,
+        public ?float $ladoMaxCm = null,
+        public ?string $placa = null,
     ) {
     }
 }

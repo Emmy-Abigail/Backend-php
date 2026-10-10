@@ -48,6 +48,20 @@ final readonly class AuthenticateTokenService implements AuthenticateTokenUseCas
             }
         }
 
+        $tipoVehiculoNombre = null;
+        $pesoMaxTotalKg = null;
+        $ladoMaxCm = null;
+        if ($user->role === 'CONDUCTOR' && $user->idTipoVehiculo !== null && $this->catalogRepository !== null) {
+            foreach ($this->catalogRepository->getVehicleTypes() as $tipoVehiculo) {
+                if ($tipoVehiculo->id === $user->idTipoVehiculo) {
+                    $tipoVehiculoNombre = $tipoVehiculo->nombre;
+                    $pesoMaxTotalKg = $tipoVehiculo->pesoMaxTotalKg;
+                    $ladoMaxCm = $tipoVehiculo->ladoMaxCm;
+                    break;
+                }
+            }
+        }
+
         return new AuthenticatedUser(
             $user->id,
             $user->names,
@@ -56,6 +70,11 @@ final readonly class AuthenticateTokenService implements AuthenticateTokenUseCas
             $user->mustChangePassword,
             $user->idSede,
             $sedeNombre,
+            $user->idTipoVehiculo,
+            $tipoVehiculoNombre,
+            $pesoMaxTotalKg,
+            $ladoMaxCm,
+            $user->placa,
         );
     }
 }
