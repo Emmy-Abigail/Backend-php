@@ -93,6 +93,9 @@ nuevo que debe guardar el frontend.
 * `GET /api/v1/vehicle-types` â€” Tipos de vehÃ­culo con pesos y dimensiones mÃ¡ximas.
 * `GET /api/v1/failure-reasons` â€” CatÃ¡logo estandarizado de motivos de fallo de entrega.
 
+### Cotizacion (Solo Operador)
+* `POST /api/v1/quotes` - Cotiza un envio sin guardarlo. El origen es la sede del operador autenticado; el precio es el mayor entre el peso real y el volumetrico (largo x ancho x alto / 5000) por la tarifa base vigente y el factor de zona (misma zona 1.0, Centro con otra 1.2, entre perifericas 1.5).
+
 ### Gestión de Personal (Solo Administrador)
 * `POST /api/v1/users` — Alta de Conductor u Operador con contraseña temporal.
 * `GET /api/v1/users` — Listado de usuarios con filtros por rol y sede.
