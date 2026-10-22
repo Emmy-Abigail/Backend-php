@@ -25,6 +25,7 @@ tags:
   - name: AutenticaciÃ³n
   - name: Usuarios
   - name: CatÃ¡logos
+  - name: Cotizaciones
   - name: Paquetes (prÃ³ximamente)
   - name: Lotes (prÃ³ximamente)
   - name: Conductor (prÃ³ximamente)
@@ -476,6 +477,61 @@ paths:
                           type: string
                         descripcion:
                           type: string
+
+  /api/v1/quotes:
+    post:
+      tags: [Cotizaciones]
+      summary: Cotizar un envio sin guardarlo
+      description: |
+        Requiere rol OPERADOR. Calcula el precio de un envio antes de registrarlo y no guarda nada.
+        El origen es la sede del operador autenticado: sale de la sesion y no del cuerpo.
+
+        Formula:
+        - peso volumetrico = largo x ancho x alto / 5000
+        - peso facturable = el mayor entre el peso real y el volumetrico
+        - monto = peso facturable x tarifa base por kg x factor de zona, redondeado a 2 decimales (half-up)
+
+        Factor de zona: misma zona 1.0; Centro con cualquier otra 1.2; entre zonas perifericas 1.5.
+        Limites: peso de 0.1 a 50 kg (hasta 2 decimales) y cada lado de 10 a 150 cm (hasta 1 decimal).
+        La tarifa base es la fila de `tarifas` con la vigencia mas reciente.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteRequest'
+            example:
+              ubigeo_destino: "150140"
+              peso_kg: 25
+              largo_cm: 12
+              ancho_cm: 30
+              alto_cm: 20
+      responses:
+        '200':
+          description: Cotizacion calculada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '503':
+          description: No hay una tarifa base vigente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: No hay una tarifa base vigente
+                error: tarifa_no_configurada
 
   /api/v1/packages:
     get:
@@ -950,6 +1006,73 @@ components:
         message:
           type: string
           example: OperaciÃ³n realizada exitosamente
+
+    QuoteRequest:
+      type: object
+      required: [ubigeo_destino, peso_kg, largo_cm, ancho_cm, alto_cm]
+      properties:
+        ubigeo_destino:
+          type: string
+          pattern: '^[0-9]{6}$'
+          description: UBIGEO del distrito de destino (debe existir y estar activo).
+          example: "150140"
+        peso_kg:
+          type: number
+          minimum: 0.1
+          maximum: 50
+          description: Peso real en kg, con hasta 2 decimales.
+          example: 25
+        largo_cm:
+          type: number
+          minimum: 10
+          maximum: 150
+          description: Largo en cm, con hasta 1 decimal.
+          example: 12
+        ancho_cm:
+          type: number
+          minimum: 10
+          maximum: 150
+          example: 30
+        alto_cm:
+          type: number
+          minimum: 10
+          maximum: 150
+          example: 20
+
+    QuoteResponse:
+      type: object
+      properties:
+        peso_volumetrico_kg:
+          type: number
+          example: 1.44
+        peso_facturable_kg:
+          type: number
+          example: 25
+        zona_origen:
+          type: string
+          example: NORTE
+        zona_destino:
+          type: string
+          example: SUR
+        factor:
+          type: number
+          example: 1.5
+        tarifa_base_kg:
+          type: number
+          example: 2.5
+        monto:
+          type: number
+          description: Monto en soles, redondeado a 2 decimales.
+          example: 93.75
+        sede_origen:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 1
+            nombre:
+              type: string
+              example: Sede Norte
 
     ErrorResponse:
       type: object
