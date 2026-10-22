@@ -21,6 +21,7 @@ use App\Infrastructure\Adapter\In\Http\Action\Auth\LoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\MeAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\RequestPasswordResetAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\SessionStatusAction;
+use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetCatalogsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetFailureReasonsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetGeographyAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetSedesAction;
@@ -127,10 +128,14 @@ $registerUserRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/
 $registerUserRoutes($app, $createUserAction, $listUsersAction, $changeUserStatusAction, $jwtAuthMiddleware, $adminRoleMiddleware, $mustChangePasswordMiddleware);
 
 // Catalogos
-$getGeographyAction = new GetGeographyAction(new GetGeographyService($catalogRepository));
+$getGeographyService = new GetGeographyService($catalogRepository);
+$getVehicleTypesService = new GetVehicleTypesService($catalogRepository);
+$getFailureReasonsService = new GetFailureReasonsService($catalogRepository);
+$getGeographyAction = new GetGeographyAction($getGeographyService);
 $getSedesAction = new GetSedesAction(new GetSedesService($catalogRepository));
-$getVehicleTypesAction = new GetVehicleTypesAction(new GetVehicleTypesService($catalogRepository));
-$getFailureReasonsAction = new GetFailureReasonsAction(new GetFailureReasonsService($catalogRepository));
+$getVehicleTypesAction = new GetVehicleTypesAction($getVehicleTypesService);
+$getFailureReasonsAction = new GetFailureReasonsAction($getFailureReasonsService);
+$getCatalogsAction = new GetCatalogsAction($getGeographyService, $getVehicleTypesService, $getFailureReasonsService);
 
 $registerCatalogRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/CatalogRoutes.php';
 $registerCatalogRoutes(
@@ -138,7 +143,8 @@ $registerCatalogRoutes(
     $getGeographyAction,
     $getSedesAction,
     $getVehicleTypesAction,
-    $getFailureReasonsAction
+    $getFailureReasonsAction,
+    $getCatalogsAction
 );
 
 // Cotizacion (solo Operador)

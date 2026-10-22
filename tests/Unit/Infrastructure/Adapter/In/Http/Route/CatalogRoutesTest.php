@@ -8,6 +8,7 @@ use App\Application\Port\In\Catalog\GetFailureReasonsUseCase;
 use App\Application\Port\In\Catalog\GetGeographyUseCase;
 use App\Application\Port\In\Catalog\GetSedesUseCase;
 use App\Application\Port\In\Catalog\GetVehicleTypesUseCase;
+use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetCatalogsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetFailureReasonsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetGeographyAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetSedesAction;
@@ -41,7 +42,9 @@ final class CatalogRoutesTest extends TestCase
         $failAction = new GetFailureReasonsAction($failUseCase);
 
         $registerRoutes = require __DIR__ . '/../../../../../../../src/Infrastructure/Adapter/In/Http/Route/CatalogRoutes.php';
-        $registerRoutes($app, $geoAction, $sedesAction, $vehAction, $failAction);
+        $catalogsAction = new GetCatalogsAction($geoUseCase, $vehUseCase, $failUseCase);
+
+        $registerRoutes($app, $geoAction, $sedesAction, $vehAction, $failAction, $catalogsAction);
 
         $reqFactory = new ServerRequestFactory();
 
@@ -49,11 +52,13 @@ final class CatalogRoutesTest extends TestCase
         self::assertSame(200, $app->handle($reqFactory->createServerRequest('GET', '/api/v1/sedes'))->getStatusCode());
         self::assertSame(200, $app->handle($reqFactory->createServerRequest('GET', '/api/v1/vehicle-types'))->getStatusCode());
         self::assertSame(200, $app->handle($reqFactory->createServerRequest('GET', '/api/v1/failure-reasons'))->getStatusCode());
+        self::assertSame(200, $app->handle($reqFactory->createServerRequest('GET', '/api/v1/catalogs'))->getStatusCode());
 
         // Alias routes
         self::assertSame(200, $app->handle($reqFactory->createServerRequest('GET', '/geography'))->getStatusCode());
         self::assertSame(200, $app->handle($reqFactory->createServerRequest('GET', '/sedes'))->getStatusCode());
         self::assertSame(200, $app->handle($reqFactory->createServerRequest('GET', '/vehicle-types'))->getStatusCode());
         self::assertSame(200, $app->handle($reqFactory->createServerRequest('GET', '/failure-reasons'))->getStatusCode());
+        self::assertSame(200, $app->handle($reqFactory->createServerRequest('GET', '/catalogs'))->getStatusCode());
     }
 }
