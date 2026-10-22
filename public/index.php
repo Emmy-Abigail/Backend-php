@@ -152,7 +152,8 @@ $registerCatalogRoutes(
     $getSedesAction,
     $getVehicleTypesAction,
     $getFailureReasonsAction,
-    $getCatalogsAction
+    $getCatalogsAction,
+    $jwtAuthMiddleware,
 );
 
 // Cotizacion (solo Operador)

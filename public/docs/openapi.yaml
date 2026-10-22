@@ -373,9 +373,13 @@ paths:
 
   /api/v1/geography:
     get:
+      security:
+        - bearerAuth: []
       tags: [CatÃ¡logos]
       summary: Obtener catÃ¡logo de geografÃ­a (Departamentos, Provincias y Distritos)
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: Estructura geogrÃ¡fica
           content:
@@ -390,9 +394,13 @@ paths:
 
   /api/v1/sedes:
     get:
+      security:
+        - bearerAuth: []
       tags: [CatÃ¡logos]
       summary: Listar sedes operativas activas
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: Lista de sedes
           content:
@@ -428,9 +436,13 @@ paths:
 
   /api/v1/vehicle-types:
     get:
+      security:
+        - bearerAuth: []
       tags: [CatÃ¡logos]
       summary: Listar tipos de vehÃ­culos
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: Lista de tipos de vehÃ­culos con capacidades
           content:
@@ -456,9 +468,13 @@ paths:
 
   /api/v1/failure-reasons:
     get:
+      security:
+        - bearerAuth: []
       tags: [CatÃ¡logos]
       summary: Listar motivos de fallos de entrega
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: Lista de motivos de fallo
           content:
@@ -480,10 +496,14 @@ paths:
 
   /api/v1/catalogs:
     get:
+      security:
+        - bearerAuth: []
       tags: [CatÃ¡logos]
       summary: Obtener en una sola llamada los catálogos del registro de paquetes
       description: Reúne los distritos (lista plana, sin anidar por departamento y provincia), los tipos de vehículo y los motivos de fallo. Reutiliza los mismos servicios que /geography, /vehicle-types y /failure-reasons.
       responses:
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '200':
           description: Catálogos agrupados
           content:
