@@ -9,7 +9,7 @@ use App\Domain\Pricing\Tariff;
 interface TariffRepository
 {
     /**
-     * Tarifa con la vigencia más reciente, o null si no hay ninguna.
+     * Tarifa vigente más reciente (sin incluir fechas futuras), o null si no hay ninguna.
      */
     public function findCurrent(): ?Tariff;
 }

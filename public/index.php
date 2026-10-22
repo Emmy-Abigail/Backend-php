@@ -12,6 +12,7 @@ use App\Application\Service\Catalog\GetGeographyService;
 use App\Application\Service\Catalog\GetSedesService;
 use App\Application\Service\Catalog\GetVehicleTypesService;
 use App\Application\Service\Pricing\QuoteShipmentService;
+use App\Application\Service\Package\RegisterPackageService;
 use App\Application\Service\User\ChangeUserStatusService;
 use App\Application\Service\User\CreateUserService;
 use App\Application\Service\User\ListUsersService;
@@ -27,6 +28,7 @@ use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetGeographyAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetSedesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetVehicleTypesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Pricing\QuoteAction;
+use App\Infrastructure\Adapter\In\Http\Action\Package\RegisterPackageAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\ChangeUserStatusAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\CreateUserAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\ListUsersAction;
@@ -35,11 +37,17 @@ use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\MustChangePasswordMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
 use App\Infrastructure\Adapter\Out\Notification\SmtpUserCredentialsMailer;
+use App\Infrastructure\Adapter\Out\Assignment\HttpBatchAssignmentGateway;
+use App\Infrastructure\Adapter\Out\Http\StreamHttpTransport;
+use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageRegistrationRepository;
+use App\Infrastructure\Adapter\Out\Pricing\LocalPackagePricing;
+use App\Infrastructure\Adapter\Out\Security\RandomTrackingGenerator;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlCatalogRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPasswordResetTokenRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlTariffRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlUserRepository;
 use App\Infrastructure\Adapter\Out\Security\JwtTokenService;
+use Illuminate\Database\Capsule\Manager as Capsule;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Slim\Exception\HttpMethodNotAllowedException;
@@ -148,16 +156,31 @@ $registerCatalogRoutes(
 );
 
 // Cotizacion (solo Operador)
+$tariffRepository = new MySqlTariffRepository();
 $quoteAction = new QuoteAction(
-    new QuoteShipmentService($catalogRepository, new MySqlTariffRepository()),
+    new QuoteShipmentService($catalogRepository, $tariffRepository),
 );
 $operatorRoleMiddleware = new RoleMiddleware('OPERADOR');
 
 $registerQuoteRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/QuoteRoutes.php';
 $registerQuoteRoutes($app, $quoteAction, $jwtAuthMiddleware, $operatorRoleMiddleware, $mustChangePasswordMiddleware);
 
+// El registro calcula el precio en PHP antes de solicitar la asignación a Python.
+$registerPackageAction = new RegisterPackageAction(new RegisterPackageService(
+    new MySqlPackageRegistrationRepository(Capsule::connection()),
+    new LocalPackagePricing($tariffRepository),
+    new HttpBatchAssignmentGateway(
+        new StreamHttpTransport(),
+        $_ENV['ASSIGNMENT_SERVICE_URL'] ?? '',
+        $_ENV['ASSIGNMENT_API_KEY'] ?? '',
+        (float) ($_ENV['ASSIGNMENT_TIMEOUT_SECONDS'] ?? 3),
+    ),
+    new RandomTrackingGenerator(),
+));
+$registerPackageRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/PackageRoutes.php';
+$registerPackageRoutes($app, $registerPackageAction, $jwtAuthMiddleware, new RoleMiddleware('OPERADOR'), $mustChangePasswordMiddleware);
+
 $routeFiles = [
-    __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/PackageRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/BatchRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/DriverRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/DeliveryRoutes.php',

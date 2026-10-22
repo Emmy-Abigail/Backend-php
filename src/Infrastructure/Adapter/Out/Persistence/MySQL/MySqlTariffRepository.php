@@ -13,6 +13,7 @@ final class MySqlTariffRepository implements TariffRepository
     public function findCurrent(): ?Tariff
     {
         $record = Capsule::table('tarifas')
+            ->where('vigente_desde', '<=', gmdate('Y-m-d H:i:s'))
             ->orderByDesc('vigente_desde')
             ->orderByDesc('id')
             ->first();

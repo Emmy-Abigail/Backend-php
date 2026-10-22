@@ -610,10 +610,68 @@ paths:
           $ref: '#/components/responses/NotImplemented'
     post:
       tags: [Paquetes (prÃ³ximamente)]
-      summary: '[Pendiente] Crear paquete'
+      summary: Registrar paquete con asignacion automatica de lote
+      operationId: registerPackage
+      description: |
+        Solo OPERADOR con sede y cambio inicial de password completado.
+        La sede, tracking, estado, precio y lote los establece el backend.
+        Calcula el precio en PHP con la tarifa vigente y el mismo calculo de /quotes.
+        Solicita a Python la asignacion y guarda remitente, lote, paquete e historial
+        en una transaccion. No requiere llamar a /quotes antes del registro.
+        Si no hay tarifa vigente o falla Python, responde 503 sin guardado parcial.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterPackageRequest'
       responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
+        '201':
+          description: Registro atomico completado con precio real y lote asignado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterPackageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Conflicto de registros concurrentes; volver a intentar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Campos invalidos o sede/distrito inexistente o inactivo; campos contiene los errores del formulario
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: datos_invalidos
+                message: Revisa los campos del paquete
+                campos:
+                  peso_kg: Debe estar entre 0.1 y 50 kg
+        '503':
+          description: Tarifa ausente/invalida o fallo del servicio de asignacion; sin guardado parcial
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                cotizacionNoDisponible:
+                  value:
+                    error: cotizacion_no_disponible
+                    message: Servicio de cotizacion no disponible
+                asignacionNoDisponible:
+                  value:
+                    error: asignacion_no_disponible
+                    message: Servicio de asignacion no disponible
 
   /api/v1/packages/{id}:
     get:
@@ -824,6 +882,151 @@ components:
             error: validacion_fallida
 
   schemas:
+    RegisterPackageRequest:
+      type: object
+      additionalProperties: false
+      required: [remitente, destinatario, direccion, peso_kg, largo_cm, ancho_cm, alto_cm]
+      properties:
+        remitente:
+          type: object
+          additionalProperties: false
+          required: [tipo_documento, numero_documento, nombres, celular]
+          properties:
+            tipo_documento:
+              type: string
+              enum: [DNI, RUC]
+            numero_documento:
+              type: string
+              description: 8 digitos para DNI; 11 para RUC
+              example: '45678912'
+            nombres:
+              type: string
+              minLength: 1
+              maxLength: 150
+              description: Nombres o razon social
+            celular:
+              type: string
+              description: Celular peruano de 9 digitos; admite prefijo +51 y espacios
+              example: '+51 987654321'
+        destinatario:
+          type: object
+          additionalProperties: false
+          required: [nombres, dni, celular]
+          properties:
+            nombres:
+              type: string
+              minLength: 1
+              maxLength: 150
+            dni:
+              type: string
+              pattern: '^[0-9]{8}$'
+              example: '41234567'
+            celular:
+              type: string
+              example: '912345678'
+        direccion:
+          type: object
+          additionalProperties: false
+          required: [ubigeo_distrito, tipo_via, nombre_via]
+          properties:
+            ubigeo_distrito:
+              type: string
+              pattern: '^[0-9]{6}$'
+              example: '150122'
+            tipo_via:
+              type: string
+              minLength: 1
+              maxLength: 20
+              example: Av.
+            nombre_via:
+              type: string
+              minLength: 1
+              maxLength: 120
+            numero:
+              type: string
+              nullable: true
+              maxLength: 10
+            manzana:
+              type: string
+              nullable: true
+              maxLength: 10
+            lote:
+              type: string
+              nullable: true
+              maxLength: 10
+            referencia:
+              type: string
+              nullable: true
+              maxLength: 255
+        peso_kg:
+          description: Entre 0.1 y 50 kg; hasta 2 decimales efectivos, sin redondeo silencioso
+          oneOf:
+            - type: number
+              minimum: 0.1
+              maximum: 50
+              multipleOf: 0.01
+            - type: string
+              pattern: '^[0-9]+(\.[0-9]+)?$'
+          example: 3
+        largo_cm:
+          $ref: '#/components/schemas/PackageDimension'
+        ancho_cm:
+          $ref: '#/components/schemas/PackageDimension'
+        alto_cm:
+          $ref: '#/components/schemas/PackageDimension'
+
+    PackageDimension:
+      description: Entre 10 y 150 cm; hasta 1 decimal efectivo, sin redondeo silencioso
+      oneOf:
+        - type: number
+          minimum: 10
+          maximum: 150
+          multipleOf: 0.1
+        - type: string
+          pattern: '^[0-9]+(\.[0-9]+)?$'
+      example: 30
+
+    RegisterPackageResponse:
+      type: object
+      required: [id, tracking_id, estado, fecha_ingreso, cotizacion, lote]
+      properties:
+        id:
+          type: integer
+        tracking_id:
+          type: string
+          description: Codigo aleatorio unico de 10 caracteres no ambiguos
+        estado:
+          type: string
+          enum: [EN_ALMACEN]
+        fecha_ingreso:
+          type: string
+          format: date-time
+        cotizacion:
+          type: object
+          required: [id_tarifa, monto]
+          properties:
+            id_tarifa:
+              type: integer
+            monto:
+              type: number
+        lote:
+          type: object
+          required: [id, codigo, estado, id_tipo_vehiculo, vehiculo, zona]
+          properties:
+            id:
+              type: integer
+            codigo:
+              type: string
+            estado:
+              type: string
+              enum: [EN_PREPARACION]
+            id_tipo_vehiculo:
+              type: integer
+            vehiculo:
+              type: string
+            zona:
+              type: string
+
     LoginRequest:
       type: object
       required: [correo, password]
