@@ -9,9 +9,12 @@ use App\Application\Port\In\Catalog\GetGeographyUseCase;
 use App\Application\Port\In\Catalog\GetSedesUseCase;
 use App\Application\Port\In\Catalog\GetVehicleTypesUseCase;
 use App\Domain\Catalog\Department;
+use App\Domain\Catalog\District;
 use App\Domain\Catalog\FailureReason;
+use App\Domain\Catalog\Province;
 use App\Domain\Catalog\Sede;
 use App\Domain\Catalog\VehicleType;
+use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetCatalogsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetFailureReasonsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetGeographyAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetSedesAction;
@@ -96,5 +99,47 @@ final class CatalogActionsTest extends TestCase
         self::assertSame(200, $response->getStatusCode());
         $body = json_decode((string) $response->getBody(), true);
         self::assertSame('CLIENTE_AUSENTE', $body['data'][0]['codigo']);
+    }
+
+    #[Test]
+    public function get_catalogs_action_junta_distritos_vehiculos_y_motivos_de_fallo(): void
+    {
+        $geoUseCase = $this->createStub(GetGeographyUseCase::class);
+        $geoUseCase->method('execute')->willReturn([
+            new Department('15', 'Lima', [
+                new Province('1501', '15', 'Lima', [
+                    new District('150122', '1501', 3, 'MIRAFLORES', 'Miraflores', -12.12, -77.03, true),
+                    new District('150104', '1501', 3, 'BARRANCO', 'Barranco', -12.14, -77.02, true),
+                ]),
+            ]),
+            new Department('07', 'Callao', [
+                new Province('0701', '07', 'Callao', [
+                    new District('070101', '0701', 5, 'CALLAO', 'Callao', -12.05, -77.12, true),
+                ]),
+            ]),
+        ]);
+
+        $vehUseCase = $this->createStub(GetVehicleTypesUseCase::class);
+        $vehUseCase->method('execute')->willReturn([
+            new VehicleType(1, 'MOTORIZADO', 'Motorizado', 1, 20.0, 40.0, 20),
+        ]);
+
+        $failUseCase = $this->createStub(GetFailureReasonsUseCase::class);
+        $failUseCase->method('execute')->willReturn([
+            new FailureReason(1, 'CLIENTE_AUSENTE', 'Cliente ausente'),
+        ]);
+
+        $response = (new GetCatalogsAction($geoUseCase, $vehUseCase, $failUseCase))(
+            (new ServerRequestFactory())->createServerRequest('GET', '/api/v1/catalogs'),
+            (new ResponseFactory())->createResponse(),
+        );
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('application/json', $response->getHeaderLine('Content-Type'));
+        $data = json_decode((string) $response->getBody(), true)['data'];
+        self::assertSame(['150122', '150104', '070101'], array_column($data['distritos'], 'ubigeo'));
+        self::assertSame('Miraflores', $data['distritos'][0]['nombre_mostrado']);
+        self::assertSame('MOTORIZADO', $data['vehiculos'][0]['codigo']);
+        self::assertSame('CLIENTE_AUSENTE', $data['motivos_fallo'][0]['codigo']);
     }
 }
