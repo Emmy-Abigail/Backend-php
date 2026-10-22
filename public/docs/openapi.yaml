@@ -477,6 +477,75 @@ paths:
                         descripcion:
                           type: string
 
+  /api/v1/catalogs:
+    get:
+      tags: [CatÃ¡logos]
+      summary: Obtener en una sola llamada los catálogos del registro de paquetes
+      description: Reúne los distritos (lista plana, sin anidar por departamento y provincia), los tipos de vehículo y los motivos de fallo. Reutiliza los mismos servicios que /geography, /vehicle-types y /failure-reasons.
+      responses:
+        '200':
+          description: Catálogos agrupados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      distritos:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            ubigeo:
+                              type: string
+                              example: '150122'
+                            ubigeo_provincia:
+                              type: string
+                            id_zona:
+                              type: integer
+                            nombre_oficial:
+                              type: string
+                            nombre_mostrado:
+                              type: string
+                            lat:
+                              type: number
+                            lng:
+                              type: number
+                            activo:
+                              type: boolean
+                      vehiculos:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            codigo:
+                              type: string
+                            nombre:
+                              type: string
+                            nivel:
+                              type: integer
+                            peso_max_total_kg:
+                              type: number
+                            lado_max_cm:
+                              type: number
+                            max_paquetes:
+                              type: integer
+                      motivos_fallo:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            codigo:
+                              type: string
+                            nombre:
+                              type: string
+
   /api/v1/packages:
     get:
       tags: [Paquetes (prÃ³ximamente)]
