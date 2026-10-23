@@ -624,10 +624,120 @@ paths:
   /api/v1/packages:
     get:
       tags: [Paquetes (prÃ³ximamente)]
-      summary: '[Pendiente] Listar paquetes'
+      summary: Listar paquetes de la sede del operador
+      operationId: listPackages
+      description: |
+        Solo OPERADOR con sede y cambio inicial de password completado.
+        La sede sale de la sesion; no se acepta como parametro.
+        Ordena del ingreso mas reciente al mas antiguo.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          description: Busca por inicio de tracking o DNI del destinatario, o por parte de su nombre. Maximo 100 caracteres.
+          schema:
+            type: string
+            example: '7123'
+        - name: estado
+          in: query
+          schema:
+            type: string
+            enum: [EN_ALMACEN, ASIGNADO, EN_RUTA, ENTREGADO, FALLIDO]
+        - name: desde
+          in: query
+          description: Fecha de ingreso desde (inclusive), AAAA-MM-DD.
+          schema:
+            type: string
+            format: date
+        - name: hasta
+          in: query
+          description: Fecha de ingreso hasta (inclusive), AAAA-MM-DD.
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
       responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
+        '200':
+          description: Pagina de paquetes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        tracking_id:
+                          type: string
+                        destinatario:
+                          type: object
+                          properties:
+                            nombres:
+                              type: string
+                            dni:
+                              type: string
+                        destino:
+                          type: object
+                          properties:
+                            ubigeo:
+                              type: string
+                            distrito:
+                              type: string
+                        peso_kg:
+                          type: number
+                        costo_estimado:
+                          type: string
+                          example: '15.50'
+                        estado:
+                          type: object
+                          properties:
+                            codigo:
+                              type: string
+                            nombre:
+                              type: string
+                        id_lote:
+                          type: integer
+                          nullable: true
+                        orden_parada:
+                          type: integer
+                          nullable: true
+                        fecha_ingreso:
+                          type: string
+                          example: '2026-10-22 10:15:00'
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      per_page:
+                        type: integer
+                      total:
+                        type: integer
+                      total_pages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
     post:
       tags: [Paquetes (prÃ³ximamente)]
       summary: Registrar paquete con asignacion automatica de lote

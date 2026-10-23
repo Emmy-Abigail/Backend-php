@@ -8,9 +8,13 @@ use App\Application\Exception\AssignmentUnavailable;
 use App\Application\Exception\PricingUnavailable;
 use App\Application\Port\In\Auth\AuthenticatedUser;
 use App\Application\Port\In\Auth\AuthenticateTokenUseCase;
+use App\Application\Port\In\Package\ListPackagesQuery;
+use App\Application\Port\In\Package\ListPackagesResult;
+use App\Application\Port\In\Package\ListPackagesUseCase;
 use App\Application\Port\In\Package\RegisterPackageResult;
 use App\Application\Port\In\Package\RegisterPackageUseCase;
 use App\Application\Port\Out\Pricing\PackageQuote;
+use App\Infrastructure\Adapter\In\Http\Action\Package\ListPackagesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\RegisterPackageAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\MustChangePasswordMiddleware;
@@ -26,13 +30,13 @@ require_once __DIR__ . '/../../../../../../Support/PackageFixture.php';
 
 final class PackageRoutesTest extends TestCase
 {
-    private function app(RegisterPackageUseCase $useCase, string $role = 'OPERADOR', bool $mustChange = false): App
+    private function app(RegisterPackageUseCase $useCase, string $role = 'OPERADOR', bool $mustChange = false, ?ListPackagesUseCase $listUseCase = null): App
     {
         $auth = $this->createStub(AuthenticateTokenUseCase::class);
         $auth->method('execute')->willReturn(new AuthenticatedUser(2, 'Operator', 'operator@example.invalid', $role, $mustChange, 1));
         $app = AppFactory::create();
         $register = require __DIR__ . '/../../../../../../../src/Infrastructure/Adapter/In/Http/Route/PackageRoutes.php';
-        $register($app, new RegisterPackageAction($useCase), new JwtAuthMiddleware($auth), new RoleMiddleware('OPERADOR'), new MustChangePasswordMiddleware());
+        $register($app, new RegisterPackageAction($useCase), new ListPackagesAction($listUseCase ?? $this->createStub(ListPackagesUseCase::class)), new JwtAuthMiddleware($auth), new RoleMiddleware('OPERADOR'), new MustChangePasswordMiddleware());
 
         return $app;
     }
@@ -102,8 +106,88 @@ final class PackageRoutesTest extends TestCase
     public function test_other_package_endpoints_remain_unimplemented(): void
     {
         $app = $this->app($this->createStub(RegisterPackageUseCase::class));
-        foreach (['/api/v1/packages', '/api/v1/packages/1', '/api/v1/packages/1/history'] as $path) {
+        foreach (['/api/v1/packages/1', '/api/v1/packages/1/history'] as $path) {
             self::assertSame(501, $app->handle((new ServerRequestFactory())->createServerRequest('GET', $path))->getStatusCode());
         }
+    }
+
+    private function listRequest(string $query = '', bool $token = true): \Psr\Http\Message\ServerRequestInterface
+    {
+        parse_str($query, $params);
+        $request = (new ServerRequestFactory())->createServerRequest('GET', '/api/v1/packages?' . $query)->withQueryParams($params);
+
+        return $token ? $request->withHeader('Authorization', 'Bearer test-token') : $request;
+    }
+
+    #[DataProvider('unauthorizedUsers')]
+    public function test_list_blocks_unauthorized_requests_before_the_use_case(string $role, bool $mustChange, bool $token, int $expected): void
+    {
+        $listUseCase = $this->createMock(ListPackagesUseCase::class);
+        $listUseCase->expects($this->never())->method('execute');
+        $app = $this->app($this->createStub(RegisterPackageUseCase::class), $role, $mustChange, $listUseCase);
+        self::assertSame($expected, $app->handle($this->listRequest(token: $token))->getStatusCode());
+    }
+
+    public function test_list_uses_the_operator_sede_and_returns_data_with_pagination(): void
+    {
+        $listUseCase = $this->createMock(ListPackagesUseCase::class);
+        $listUseCase->expects($this->once())->method('execute')
+            ->with($this->callback(static fn (ListPackagesQuery $q): bool => $q->operator->idSede === 1
+                && $q->search === '7123'
+                && $q->status === 'EN_ALMACEN'
+                && $q->from === '2026-10-01'
+                && $q->to === '2026-10-31'
+                && $q->page === 2
+                && $q->perPage === 5))
+            ->willReturn(new ListPackagesResult([['id' => 10, 'tracking_id' => 'AB23456789']], 6, 2, 5));
+        $app = $this->app($this->createStub(RegisterPackageUseCase::class), listUseCase: $listUseCase);
+
+        $response = $app->handle($this->listRequest('q=+7123+&estado=en_almacen&desde=2026-10-01&hasta=2026-10-31&page=2&per_page=5&id_sede=9'));
+
+        self::assertSame(200, $response->getStatusCode());
+        $body = json_decode((string) $response->getBody(), true);
+        self::assertSame('AB23456789', $body['data'][0]['tracking_id']);
+        self::assertSame(['page' => 2, 'per_page' => 5, 'total' => 6, 'total_pages' => 2], $body['meta']);
+    }
+
+    public function test_list_uses_default_pagination(): void
+    {
+        $listUseCase = $this->createMock(ListPackagesUseCase::class);
+        $listUseCase->expects($this->once())->method('execute')
+            ->with($this->callback(static fn (ListPackagesQuery $q): bool => $q->page === 1 && $q->perPage === 20 && $q->search === null && $q->status === null))
+            ->willReturn(new ListPackagesResult([], 0, 1, 20));
+        $app = $this->app($this->createStub(RegisterPackageUseCase::class), listUseCase: $listUseCase);
+
+        $response = $app->handle($this->listRequest());
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(['data' => [], 'meta' => ['page' => 1, 'per_page' => 20, 'total' => 0, 'total_pages' => 0]], json_decode((string) $response->getBody(), true));
+    }
+
+    #[DataProvider('invalidListParams')]
+    public function test_list_rejects_invalid_params(string $query, string $field): void
+    {
+        $listUseCase = $this->createMock(ListPackagesUseCase::class);
+        $listUseCase->expects($this->never())->method('execute');
+        $app = $this->app($this->createStub(RegisterPackageUseCase::class), listUseCase: $listUseCase);
+
+        $response = $app->handle($this->listRequest($query));
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertArrayHasKey($field, json_decode((string) $response->getBody(), true)['campos']);
+    }
+
+    public static function invalidListParams(): array
+    {
+        return [
+            ['estado=PERDIDO', 'estado'],
+            ['desde=21-10-2026', 'desde'],
+            ['hasta=2026-02-30', 'hasta'],
+            ['desde=2026-10-31&hasta=2026-10-01', 'desde'],
+            ['page=0', 'page'],
+            ['page=abc', 'page'],
+            ['per_page=101', 'per_page'],
+            ['q=' . str_repeat('a', 101), 'q'],
+        ];
     }
 }

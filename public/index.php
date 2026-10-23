@@ -12,6 +12,7 @@ use App\Application\Service\Catalog\GetGeographyService;
 use App\Application\Service\Catalog\GetSedesService;
 use App\Application\Service\Catalog\GetVehicleTypesService;
 use App\Application\Service\Pricing\QuoteShipmentService;
+use App\Application\Service\Package\ListPackagesService;
 use App\Application\Service\Package\RegisterPackageService;
 use App\Application\Service\User\ChangeUserStatusService;
 use App\Application\Service\User\CreateUserService;
@@ -28,6 +29,7 @@ use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetGeographyAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetSedesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetVehicleTypesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Pricing\QuoteAction;
+use App\Infrastructure\Adapter\In\Http\Action\Package\ListPackagesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\RegisterPackageAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\ChangeUserStatusAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\CreateUserAction;
@@ -39,6 +41,7 @@ use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
 use App\Infrastructure\Adapter\Out\Notification\SmtpUserCredentialsMailer;
 use App\Infrastructure\Adapter\Out\Assignment\HttpBatchAssignmentGateway;
 use App\Infrastructure\Adapter\Out\Http\StreamHttpTransport;
+use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageQueryRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageRegistrationRepository;
 use App\Infrastructure\Adapter\Out\Pricing\LocalPackagePricing;
 use App\Infrastructure\Adapter\Out\Security\RandomTrackingGenerator;
@@ -178,8 +181,11 @@ $registerPackageAction = new RegisterPackageAction(new RegisterPackageService(
     ),
     new RandomTrackingGenerator(),
 ));
+$listPackagesAction = new ListPackagesAction(new ListPackagesService(
+    new MySqlPackageQueryRepository(Capsule::connection()),
+));
 $registerPackageRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/PackageRoutes.php';
-$registerPackageRoutes($app, $registerPackageAction, $jwtAuthMiddleware, new RoleMiddleware('OPERADOR'), $mustChangePasswordMiddleware);
+$registerPackageRoutes($app, $registerPackageAction, $listPackagesAction, $jwtAuthMiddleware, new RoleMiddleware('OPERADOR'), $mustChangePasswordMiddleware);
 
 $routeFiles = [
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/BatchRoutes.php',
