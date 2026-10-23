@@ -96,6 +96,12 @@ nuevo que debe guardar el frontend.
 ### Cotizacion (Solo Operador)
 * `POST /api/v1/quotes` - Cotiza un envio sin guardarlo. El origen es la sede del operador autenticado; el precio es el mayor entre el peso real y el volumetrico (largo x ancho x alto / 5000) por la tarifa base vigente y el factor de zona (misma zona 1.0, Centro con otra 1.2, entre perifericas 1.5).
 
+### Lotes (Operador y Conductor)
+El lote se crea solo al registrar un paquete (queda `EN_PREPARACION`) y el Operador lo despacha a un conductor.
+* `GET /api/v1/batches` - Lista paginada (`estado`, `page`, `size` maximo 100). El Operador ve los lotes de su sede; el Conductor, solo los suyos (por defecto Asignados y En Ruta).
+* `GET /api/v1/batches/{id}` - Detalle. Operador: paquetes, progreso, `version` y conductores disponibles con placa. Conductor: sus paradas en orden de entrega.
+* `POST /api/v1/batches/{id}/dispatch` - Solo Operador. Body `{ "id_conductor": 31, "version": 0 }`. Pide a Python el orden de las paradas y guarda conductor, paradas, estados e historial en una transaccion. Responde 409 si otro operador se adelanto o el conductor ya no esta disponible (activo, mismo tipo de vehiculo y menos de 3 lotes pendientes), y 503 si Python no responde.
+
 ### Gestión de Personal (Solo Administrador)
 * `POST /api/v1/users` — Alta de Conductor u Operador con contraseña temporal.
 * `GET /api/v1/users` — Listado de usuarios con filtros por rol y sede.
