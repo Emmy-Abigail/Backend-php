@@ -7,6 +7,9 @@ use App\Application\Service\Auth\ChangePasswordService;
 use App\Application\Service\Auth\ConfirmPasswordResetService;
 use App\Application\Service\Auth\LoginService;
 use App\Application\Service\Auth\RequestPasswordResetService;
+use App\Application\Service\Batch\DispatchBatchService;
+use App\Application\Service\Batch\GetBatchService;
+use App\Application\Service\Batch\ListBatchesService;
 use App\Application\Service\Catalog\GetFailureReasonsService;
 use App\Application\Service\Catalog\GetGeographyService;
 use App\Application\Service\Catalog\GetSedesService;
@@ -22,6 +25,9 @@ use App\Infrastructure\Adapter\In\Http\Action\Auth\LoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\MeAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\RequestPasswordResetAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\SessionStatusAction;
+use App\Infrastructure\Adapter\In\Http\Action\Batch\DispatchBatchAction;
+use App\Infrastructure\Adapter\In\Http\Action\Batch\GetBatchAction;
+use App\Infrastructure\Adapter\In\Http\Action\Batch\ListBatchesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetCatalogsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetFailureReasonsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetGeographyAction;
@@ -39,8 +45,11 @@ use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
 use App\Infrastructure\Adapter\Out\Notification\SmtpUserCredentialsMailer;
 use App\Infrastructure\Adapter\Out\Assignment\HttpBatchAssignmentGateway;
 use App\Infrastructure\Adapter\Out\Http\StreamHttpTransport;
+use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlBatchDispatchRepository;
+use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlBatchReadRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageRegistrationRepository;
 use App\Infrastructure\Adapter\Out\Pricing\LocalPackagePricing;
+use App\Infrastructure\Adapter\Out\Route\HttpRouteOptimizerGateway;
 use App\Infrastructure\Adapter\Out\Security\RandomTrackingGenerator;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlCatalogRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPasswordResetTokenRepository;
@@ -181,8 +190,33 @@ $registerPackageAction = new RegisterPackageAction(new RegisterPackageService(
 $registerPackageRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/PackageRoutes.php';
 $registerPackageRoutes($app, $registerPackageAction, $jwtAuthMiddleware, new RoleMiddleware('OPERADOR'), $mustChangePasswordMiddleware);
 
+// Lotes: consulta (Operador y Conductor) y despacho (Operador). El orden de las paradas lo calcula Python.
+// La ruta usa el mismo servicio que la asignación, salvo que se definan las variables ROUTE_*.
+$batchReadRepository = new MySqlBatchReadRepository(Capsule::connection());
+$listBatchesAction = new ListBatchesAction(new ListBatchesService($batchReadRepository));
+$getBatchAction = new GetBatchAction(new GetBatchService($batchReadRepository));
+$dispatchBatchAction = new DispatchBatchAction(new DispatchBatchService(
+    new MySqlBatchDispatchRepository(Capsule::connection()),
+    new HttpRouteOptimizerGateway(
+        new StreamHttpTransport(),
+        $_ENV['ROUTE_SERVICE_URL'] ?? $_ENV['ASSIGNMENT_SERVICE_URL'] ?? '',
+        $_ENV['ROUTE_API_KEY'] ?? $_ENV['ASSIGNMENT_API_KEY'] ?? '',
+        (float) ($_ENV['ROUTE_TIMEOUT_SECONDS'] ?? $_ENV['ASSIGNMENT_TIMEOUT_SECONDS'] ?? 3),
+    ),
+));
+$registerBatchRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/BatchRoutes.php';
+$registerBatchRoutes(
+    $app,
+    $listBatchesAction,
+    $getBatchAction,
+    $dispatchBatchAction,
+    $jwtAuthMiddleware,
+    new RoleMiddleware('OPERADOR', 'CONDUCTOR'),
+    new RoleMiddleware('OPERADOR'),
+    $mustChangePasswordMiddleware,
+);
+
 $routeFiles = [
-    __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/BatchRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/DriverRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/DeliveryRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/TrackingRoutes.php',
