@@ -17,4 +17,6 @@ interface PackageQueryRepository
         int $page,
         int $perPage,
     ): ListPackagesResult;
+
+    public function findDetail(int $packageId): ?PackageDetail;
 }

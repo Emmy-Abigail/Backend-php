@@ -12,6 +12,7 @@ use App\Application\Service\Catalog\GetGeographyService;
 use App\Application\Service\Catalog\GetSedesService;
 use App\Application\Service\Catalog\GetVehicleTypesService;
 use App\Application\Service\Pricing\QuoteShipmentService;
+use App\Application\Service\Package\GetPackageService;
 use App\Application\Service\Package\ListPackagesService;
 use App\Application\Service\Package\RegisterPackageService;
 use App\Application\Service\User\ChangeUserStatusService;
@@ -29,6 +30,7 @@ use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetGeographyAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetSedesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetVehicleTypesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Pricing\QuoteAction;
+use App\Infrastructure\Adapter\In\Http\Action\Package\GetPackageAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\ListPackagesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\RegisterPackageAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\ChangeUserStatusAction;
@@ -181,11 +183,20 @@ $registerPackageAction = new RegisterPackageAction(new RegisterPackageService(
     ),
     new RandomTrackingGenerator(),
 ));
-$listPackagesAction = new ListPackagesAction(new ListPackagesService(
-    new MySqlPackageQueryRepository(Capsule::connection()),
-));
+$packageQueryRepository = new MySqlPackageQueryRepository(Capsule::connection());
+$listPackagesAction = new ListPackagesAction(new ListPackagesService($packageQueryRepository));
+$getPackageAction = new GetPackageAction(new GetPackageService($packageQueryRepository));
 $registerPackageRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/PackageRoutes.php';
-$registerPackageRoutes($app, $registerPackageAction, $listPackagesAction, $jwtAuthMiddleware, new RoleMiddleware('OPERADOR'), $mustChangePasswordMiddleware);
+$registerPackageRoutes(
+    $app,
+    $registerPackageAction,
+    $listPackagesAction,
+    $getPackageAction,
+    $jwtAuthMiddleware,
+    new RoleMiddleware('OPERADOR'),
+    $mustChangePasswordMiddleware,
+    new RoleMiddleware('OPERADOR', 'CONDUCTOR'),
+);
 
 $routeFiles = [
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/BatchRoutes.php',

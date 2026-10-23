@@ -5,15 +5,21 @@ declare(strict_types=1);
 namespace Tests\Unit\Infrastructure\Adapter\In\Http\Route;
 
 use App\Application\Exception\AssignmentUnavailable;
+use App\Application\Exception\PackageAccessDenied;
+use App\Application\Exception\PackageNotFound;
 use App\Application\Exception\PricingUnavailable;
 use App\Application\Port\In\Auth\AuthenticatedUser;
 use App\Application\Port\In\Auth\AuthenticateTokenUseCase;
+use App\Application\Port\In\Package\GetPackageQuery;
+use App\Application\Port\In\Package\GetPackageResult;
+use App\Application\Port\In\Package\GetPackageUseCase;
 use App\Application\Port\In\Package\ListPackagesQuery;
 use App\Application\Port\In\Package\ListPackagesResult;
 use App\Application\Port\In\Package\ListPackagesUseCase;
 use App\Application\Port\In\Package\RegisterPackageResult;
 use App\Application\Port\In\Package\RegisterPackageUseCase;
 use App\Application\Port\Out\Pricing\PackageQuote;
+use App\Infrastructure\Adapter\In\Http\Action\Package\GetPackageAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\ListPackagesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\RegisterPackageAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
@@ -30,13 +36,13 @@ require_once __DIR__ . '/../../../../../../Support/PackageFixture.php';
 
 final class PackageRoutesTest extends TestCase
 {
-    private function app(RegisterPackageUseCase $useCase, string $role = 'OPERADOR', bool $mustChange = false, ?ListPackagesUseCase $listUseCase = null): App
+    private function app(RegisterPackageUseCase $useCase, string $role = 'OPERADOR', bool $mustChange = false, ?ListPackagesUseCase $listUseCase = null, ?GetPackageUseCase $getUseCase = null): App
     {
         $auth = $this->createStub(AuthenticateTokenUseCase::class);
         $auth->method('execute')->willReturn(new AuthenticatedUser(2, 'Operator', 'operator@example.invalid', $role, $mustChange, 1));
         $app = AppFactory::create();
         $register = require __DIR__ . '/../../../../../../../src/Infrastructure/Adapter/In/Http/Route/PackageRoutes.php';
-        $register($app, new RegisterPackageAction($useCase), new ListPackagesAction($listUseCase ?? $this->createStub(ListPackagesUseCase::class)), new JwtAuthMiddleware($auth), new RoleMiddleware('OPERADOR'), new MustChangePasswordMiddleware());
+        $register($app, new RegisterPackageAction($useCase), new ListPackagesAction($listUseCase ?? $this->createStub(ListPackagesUseCase::class)), new GetPackageAction($getUseCase ?? $this->createStub(GetPackageUseCase::class)), new JwtAuthMiddleware($auth), new RoleMiddleware('OPERADOR'), new MustChangePasswordMiddleware(), new RoleMiddleware('OPERADOR', 'CONDUCTOR'));
 
         return $app;
     }
@@ -106,7 +112,7 @@ final class PackageRoutesTest extends TestCase
     public function test_other_package_endpoints_remain_unimplemented(): void
     {
         $app = $this->app($this->createStub(RegisterPackageUseCase::class));
-        foreach (['/api/v1/packages/1', '/api/v1/packages/1/history'] as $path) {
+        foreach (['/api/v1/packages/1/history'] as $path) {
             self::assertSame(501, $app->handle((new ServerRequestFactory())->createServerRequest('GET', $path))->getStatusCode());
         }
     }
@@ -189,5 +195,80 @@ final class PackageRoutesTest extends TestCase
             ['per_page=101', 'per_page'],
             ['q=' . str_repeat('a', 101), 'q'],
         ];
+    }
+
+    private function detailRequest(string $id = '1', bool $token = true): \Psr\Http\Message\ServerRequestInterface
+    {
+        $request = (new ServerRequestFactory())->createServerRequest('GET', '/api/v1/packages/' . $id);
+
+        return $token ? $request->withHeader('Authorization', 'Bearer test-token') : $request;
+    }
+
+    #[DataProvider('detailAccess')]
+    public function test_detail_checks_token_role_and_password_change_before_the_use_case(string $role, bool $mustChange, bool $token, int $expected): void
+    {
+        $getUseCase = $this->createMock(GetPackageUseCase::class);
+        $getUseCase->expects($this->never())->method('execute');
+        $app = $this->app($this->createStub(RegisterPackageUseCase::class), $role, $mustChange, getUseCase: $getUseCase);
+        self::assertSame($expected, $app->handle($this->detailRequest(token: $token))->getStatusCode());
+    }
+
+    public static function detailAccess(): array
+    {
+        return [['OPERADOR', false, false, 401], ['ADMINISTRADOR', false, true, 403], ['CONDUCTOR', true, true, 403]];
+    }
+
+    #[DataProvider('detailViewers')]
+    public function test_detail_lets_operators_and_drivers_reach_the_use_case(string $role): void
+    {
+        $getUseCase = $this->createMock(GetPackageUseCase::class);
+        $getUseCase->expects($this->once())->method('execute')
+            ->with($this->callback(static fn (GetPackageQuery $q): bool => $q->packageId === 15 && $q->viewer->role === $role))
+            ->willReturn(new GetPackageResult(['id' => 15, 'tracking_id' => 'AB23456789', 'historial' => []]));
+        $app = $this->app($this->createStub(RegisterPackageUseCase::class), $role, getUseCase: $getUseCase);
+
+        $response = $app->handle($this->detailRequest('15'));
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('AB23456789', json_decode((string) $response->getBody(), true)['tracking_id']);
+    }
+
+    public static function detailViewers(): array
+    {
+        return [['OPERADOR'], ['CONDUCTOR']];
+    }
+
+    #[DataProvider('invalidIds')]
+    public function test_detail_rejects_invalid_ids(string $id): void
+    {
+        $getUseCase = $this->createMock(GetPackageUseCase::class);
+        $getUseCase->expects($this->never())->method('execute');
+        $response = $this->app($this->createStub(RegisterPackageUseCase::class), getUseCase: $getUseCase)->handle($this->detailRequest($id));
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertSame('id_invalido', json_decode((string) $response->getBody(), true)['error']);
+    }
+
+    public static function invalidIds(): array
+    {
+        return [['0'], ['abc'], ['-3'], ['1.5']];
+    }
+
+    public function test_detail_maps_not_found_and_access_denied(): void
+    {
+        $getUseCase = $this->createStub(GetPackageUseCase::class);
+        $getUseCase->method('execute')->willReturnOnConsecutiveCalls(
+            $this->throwException(new PackageNotFound('El paquete no existe')),
+            $this->throwException(new PackageAccessDenied('No puede ver paquetes de otra sede')),
+        );
+        $app = $this->app($this->createStub(RegisterPackageUseCase::class), getUseCase: $getUseCase);
+
+        $notFound = $app->handle($this->detailRequest('99'));
+        self::assertSame(404, $notFound->getStatusCode());
+        self::assertSame('paquete_no_encontrado', json_decode((string) $notFound->getBody(), true)['error']);
+
+        $denied = $app->handle($this->detailRequest('7'));
+        self::assertSame(403, $denied->getStatusCode());
+        self::assertSame('sin_permisos', json_decode((string) $denied->getBody(), true)['error']);
     }
 }
