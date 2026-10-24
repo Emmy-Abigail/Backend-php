@@ -4,3 +4,4 @@
 *.log
 *.pdf
 *.md
+/var/evidence/
