@@ -28,6 +28,8 @@ tags:
   - name: Cotizaciones
   - name: Paquetes (prÃ³ximamente)
   - name: Lotes
+  - name: Conductor
+  - name: Entregas
   - name: Lotes (prÃ³ximamente)
   - name: Conductor (prÃ³ximamente)
   - name: Entregas (prÃ³ximamente)
@@ -582,6 +584,8 @@ paths:
 
         Factor de zona: misma zona 1.0; Centro con cualquier otra 1.2; entre zonas perifericas 1.5.
         Limites: peso de 0.1 a 50 kg (hasta 2 decimales) y cada lado de 10 a 150 cm (hasta 1 decimal).
+        Valida las mismas medidas que el registro de paquetes, sin redondear la entrada.
+        Los ceros finales no cuentan como precision adicional; los excesos de limites o precision responden 422.
         La tarifa base es la fila de `tarifas` con la vigencia mas reciente.
       security:
         - bearerAuth: []
@@ -625,10 +629,125 @@ paths:
   /api/v1/packages:
     get:
       tags: [Paquetes (prÃ³ximamente)]
-      summary: '[Pendiente] Listar paquetes'
+      summary: Listar paquetes de la sede del operador
+      operationId: listPackages
+      description: |
+        Solo OPERADOR con sede y cambio inicial de password completado.
+        La sede sale de la sesion; no se acepta como parametro.
+        Ordena del ingreso mas reciente al mas antiguo.
+        Los filtros de fecha representan dias completos de America/Lima; la BD guarda UTC.
+        Las fechas de respuesta se devuelven en ISO 8601 con offset -05:00.
+        Los filtros deben ser textos simples; listas u objetos se rechazan con 422.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          description: Busca por inicio de tracking o DNI del destinatario, o por parte de su nombre. Maximo 100 caracteres.
+          schema:
+            type: string
+            example: '7123'
+        - name: estado
+          in: query
+          schema:
+            type: string
+            enum: [EN_ALMACEN, ASIGNADO, EN_RUTA, ENTREGADO, FALLIDO]
+        - name: desde
+          in: query
+          description: Fecha de ingreso desde (inclusive), AAAA-MM-DD en America/Lima.
+          schema:
+            type: string
+            format: date
+        - name: hasta
+          in: query
+          description: Fecha de ingreso hasta (inclusive), AAAA-MM-DD en America/Lima.
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          description: Entero positivo; se rechaza con 422 si el desplazamiento calculado con per_page excede el rango entero.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
       responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
+        '200':
+          description: Pagina de paquetes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        tracking_id:
+                          type: string
+                        destinatario:
+                          type: object
+                          properties:
+                            nombres:
+                              type: string
+                            dni:
+                              type: string
+                        destino:
+                          type: object
+                          properties:
+                            ubigeo:
+                              type: string
+                            distrito:
+                              type: string
+                        peso_kg:
+                          type: number
+                        costo_estimado:
+                          type: string
+                          example: '15.50'
+                        estado:
+                          type: object
+                          properties:
+                            codigo:
+                              type: string
+                            nombre:
+                              type: string
+                        id_lote:
+                          type: integer
+                          nullable: true
+                        orden_parada:
+                          type: integer
+                          nullable: true
+                        fecha_ingreso:
+                          type: string
+                          format: date-time
+                          example: '2026-10-22T10:15:00-05:00'
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      per_page:
+                        type: integer
+                      total:
+                        type: integer
+                      total_pages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
     post:
       tags: [Paquetes (prÃ³ximamente)]
       summary: Registrar paquete con asignacion automatica de lote
@@ -697,12 +816,198 @@ paths:
   /api/v1/packages/{id}:
     get:
       tags: [Paquetes (prÃ³ximamente)]
-      summary: '[Pendiente] Consultar paquete por ID'
+      summary: Consultar el detalle e historial de un paquete
+      operationId: getPackage
+      description: |
+        OPERADOR: solo paquetes de su sede; ve el detalle completo.
+        CONDUCTOR: solo paquetes de un lote asignado a el en estado ASIGNADO o EN_RUTA;
+        no recibe remitente ni costo_estimado.
+        Ambos deben haber completado el cambio inicial de password.
+        El historial va del cambio mas antiguo al mas reciente y no expone la ubicacion de la evidencia.
+        Incluye vehiculo (id, codigo y nombre) tomado del lote, incluso antes de asignar conductor.
+        Si un paquete no tiene lote, vehiculo es null. Las fechas usan ISO 8601 con offset -05:00.
+      security:
+        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/PackageId'
       responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
+        '200':
+          description: Detalle del paquete con historial
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  tracking_id:
+                    type: string
+                  sede:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      nombre:
+                        type: string
+                  estado:
+                    type: object
+                    properties:
+                      codigo:
+                        type: string
+                      nombre:
+                        type: string
+                  destinatario:
+                    type: object
+                    properties:
+                      nombres:
+                        type: string
+                      dni:
+                        type: string
+                      celular:
+                        type: string
+                  direccion:
+                    type: object
+                    properties:
+                      ubigeo:
+                        type: string
+                      distrito:
+                        type: string
+                      tipo_via:
+                        type: string
+                      nombre_via:
+                        type: string
+                      numero:
+                        type: string
+                        nullable: true
+                      manzana:
+                        type: string
+                        nullable: true
+                      lote:
+                        type: string
+                        nullable: true
+                      referencia:
+                        type: string
+                        nullable: true
+                  medidas:
+                    type: object
+                    properties:
+                      peso_kg:
+                        type: number
+                      largo_cm:
+                        type: number
+                      ancho_cm:
+                        type: number
+                      alto_cm:
+                        type: number
+                  costo_estimado:
+                    type: string
+                    description: Solo para OPERADOR.
+                  vehiculo:
+                    type: object
+                    nullable: true
+                    description: Tipo de vehiculo del lote, disponible para OPERADOR y CONDUCTOR.
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                      codigo:
+                        type: string
+                        example: MOTORIZADO
+                      nombre:
+                        type: string
+                        example: Motorizado
+                  remitente:
+                    type: object
+                    description: Solo para OPERADOR.
+                    properties:
+                      tipo_documento:
+                        type: string
+                      numero_documento:
+                        type: string
+                      nombres:
+                        type: string
+                      celular:
+                        type: string
+                  lote:
+                    type: object
+                    nullable: true
+                    properties:
+                      id:
+                        type: integer
+                      codigo:
+                        type: string
+                      estado:
+                        type: string
+                      orden_parada:
+                        type: integer
+                        nullable: true
+                      conductor:
+                        type: object
+                        nullable: true
+                        properties:
+                          id:
+                            type: integer
+                          nombres:
+                            type: string
+                          placa:
+                            type: string
+                            nullable: true
+                  fecha_ingreso:
+                    type: string
+                    format: date-time
+                    example: '2026-10-24T00:00:00-05:00'
+                  historial:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        estado_anterior:
+                          type: string
+                          nullable: true
+                        estado_nuevo:
+                          type: string
+                        estado_nuevo_nombre:
+                          type: string
+                        fecha:
+                          type: string
+                          format: date-time
+                          example: '2026-10-24T10:30:00-05:00'
+                        usuario:
+                          type: object
+                          properties:
+                            nombres:
+                              type: string
+                            rol:
+                              type: string
+                        motivo_fallo:
+                          type: object
+                          nullable: true
+                          properties:
+                            codigo:
+                              type: string
+                            nombre:
+                              type: string
+                        comentario:
+                          type: string
+                          nullable: true
+                        tiene_evidencia:
+                          type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: El paquete no existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '422':
+          description: El id no es un entero positivo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
 
   /api/v1/packages/{id}/history:
     get:
@@ -851,6 +1156,9 @@ paths:
         orden incluya todos los paquetes del lote.
 
         El conductor debe estar activo, manejar el tipo de vehiculo del lote y tener menos de 3 lotes pendientes.
+        Antes de guardar se revalida que la suma de pesos actuales no supere la capacidad vigente
+        del tipo de vehiculo, dentro de la transaccion. El limite exacto se acepta.
+        Si se excede, responde 409 capacidad_excedida sin cambiar lote, paquetes ni historial.
       security:
         - bearerAuth: []
       parameters:
@@ -899,6 +1207,7 @@ paths:
             `lote_ya_despachado` (otro operador se adelanto; el mensaje nombra al operador y al conductor),
             `version_desactualizada` (la version enviada no es la actual),
             `lote_cambio` (el lote cambio durante el despacho y se agotaron los reintentos),
+            `capacidad_excedida` (el peso total supera la capacidad vigente del vehiculo),
             `lote_vacio` o
             `conductor_no_disponible` (inactivo o con 3 lotes pendientes).
           content:
@@ -914,6 +1223,10 @@ paths:
                   value:
                     message: El conductor ya no esta disponible
                     error: conductor_no_disponible
+                capacidadExcedida:
+                  value:
+                    message: El peso total del lote supera la capacidad del vehiculo
+                    error: capacidad_excedida
         '422':
           description: |
             Cuerpo o id invalidos (`campo_obligatorio`, `campo_invalido`, `id_invalido`) o conductor inexistente
@@ -963,13 +1276,336 @@ paths:
 
   /api/v1/batches/{id}/start-route:
     post:
-      tags: [Conductor (prÃ³ximamente)]
-      summary: '[Pendiente] Iniciar ruta de un lote'
+      tags: [Conductor]
+      summary: Iniciar la ruta de un lote asignado
+      operationId: startBatchRoute
+      description: |
+        Solo CONDUCTOR activo con el cambio inicial de password completado (HU-39 y HU-40).
+        No requiere cuerpo: el conductor se obtiene del JWT y el lote del path.
+        El lote debe pertenecerle, estar ASIGNADO y tener al menos un paquete;
+        todos sus paquetes deben estar ASIGNADOS. Conserva el orden de paradas del despacho.
+        Solo permite un lote EN_RUTA por conductor, incluso ante peticiones simultaneas.
+        Guarda estado, started_at, estados de paquetes e historial en una sola transaccion.
+        No consulta Python. Un segundo inicio no duplica eventos ni cambia la hora de salida.
+        El frontend debe pedir confirmacion antes de enviar la peticion.
+      security:
+        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/BatchId'
       responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
+        '200':
+          description: Lote y todos sus paquetes en ruta
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartRouteResponse'
+        '400':
+          description: Salto de estado; el lote todavia esta EN_PREPARACION
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: transicion_invalida
+                message: El lote debe estar asignado antes de iniciar la ruta
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Rol no permitido, cambio de password pendiente o lote de otro conductor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: El lote no existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflicto; sin cambios ni historial parcial
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                otraRutaActiva:
+                  value:
+                    error: conductor_en_ruta
+                    message: Ya tiene otro lote en ruta
+                inicioRepetido:
+                  value:
+                    error: lote_ya_iniciado
+                    message: El lote ya inicio su ruta o esta cerrado
+                loteVacio:
+                  value:
+                    error: lote_vacio
+                    message: El lote no tiene paquetes asignados
+                paquetesInconsistentes:
+                  value:
+                    error: paquetes_no_asignados
+                    message: Todos los paquetes del lote deben estar asignados
+                bloqueoConcurrente:
+                  value:
+                    error: inicio_ruta_en_conflicto
+                    message: La ruta esta siendo modificada; vuelve a intentarlo
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /api/v1/packages/{id}/evidence:
+    get:
+      tags: [Entregas]
+      summary: Consultar la foto privada de entrega
+      operationId: getPackageEvidence
+      description: |
+        HU-46. Solo ADMINISTRADOR u OPERADOR activo con el cambio inicial de password
+        completado. El administrador puede consultar cualquier sede; el operador,
+        exclusivamente paquetes de su sede (id_sede del usuario autenticado).
+        CONDUCTOR y clientes no tienen acceso, aunque el conductor haya subido la foto.
+        Solo hay evidencia disponible si el estado actual del paquete es ENTREGADO
+        y el ultimo evento ENTREGADO tiene una clave y un archivo privado disponible.
+        Ordena esos eventos por created_at e id descendentes; no recupera una foto
+        anterior cuando el ultimo evento de entrega carece de evidencia.
+        La evidencia sigue disponible despues de cerrar el lote.
+        Devuelve los bytes de la imagen JPEG/PNG, sin redirigir a una URL publica ni
+        exponer la evidencia_key, el nombre original o la ruta del archivo.
+        Tanto el exito como los errores llevan Cache-Control private, no-store,
+        Pragma no-cache, Vary Authorization y X-Content-Type-Options nosniff.
+        HEAD aplica los mismos permisos y cabeceras y devuelve un cuerpo vacio.
+        Las cabeceras condicionales no evitan la autenticacion ni generan respuestas 304.
+        No cambia estados, historial o archivos, ni consulta Python.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PackageId'
+      responses:
+        '200':
+          description: Foto privada de la entrega
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                enum: ['private, no-store']
+            Content-Disposition:
+              description: Nombre generado por el servidor, sin la clave privada del archivo
+              schema:
+                type: string
+                example: 'inline; filename="evidencia-42.jpg"'
+            Content-Length:
+              schema:
+                type: integer
+                minimum: 1
+            X-Content-Type-Options:
+              schema:
+                type: string
+                enum: [nosniff]
+            Vary:
+              schema:
+                type: string
+                example: Authorization
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Rol no permitido, cambio inicial pendiente, operador sin sede o de otra sede
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Paquete inexistente o evidencia no disponible; estados distintos de ENTREGADO, sin foto o archivo ausente/invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                paqueteInexistente:
+                  value:
+                    error: paquete_no_encontrado
+                    message: El paquete no existe
+                sinEvidencia:
+                  value:
+                    error: evidencia_no_encontrada
+                    message: No hay evidencia disponible para este paquete
+        '422':
+          description: El id del paquete no es valido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: No se pudo consultar la evidencia; no se exponen detalles internos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Almacenamiento privado no disponible o archivo temporalmente ilegible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/packages/{id}/final-status:
+    post:
+      tags: [Entregas]
+      summary: Registrar entrega o fallo y cerrar automaticamente el lote
+      operationId: finalizePackage
+      description: |
+        HU-41 a HU-45. Solo el CONDUCTOR activo del lote, con el cambio inicial de
+        password completado. Tanto el lote como el paquete deben estar EN_RUTA.
+        ENTREGADO requiere una foto JPEG/PNG valida de hasta 5242880 bytes (5 MiB),
+        admite observacion opcional y no admite id_motivo. Se verifica el contenido
+        decodificando la imagen, sin confiar en nombre, extension o MIME declarados.
+        Una resolucion que exceda la memoria disponible del servidor se rechaza con 422;
+        el cliente debe reducir las dimensiones antes de reintentar.
+        FALLIDO requiere id_motivo del catalogo y observacion no vacia; no admite foto.
+        Las observaciones se recortan y admiten hasta 65535 bytes de texto UTF-8.
+        La foto se guarda fuera de public con una clave aleatoria privada.
+        Si falla el almacenamiento, no se cambia el estado ni se guarda historial.
+        Guarda estado e historial en una transaccion; cuando todos los paquetes son
+        ENTREGADO/FALLIDO, cierra el lote y guarda closed_at en esa misma transaccion.
+        Las peticiones simultaneas se serializan por lote. Un paquete finalizado
+        devuelve 409 ante cualquier nuevo intento, sin duplicar eventos o evidencias.
+        Fechas persistidas en UTC y devueltas en ISO 8601 con hora de Lima (-05:00).
+        No consulta Python. La confirmacion y compresion de fotos corresponden al frontend.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PackageId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              oneOf:
+                - type: object
+                  required: [estado, foto]
+                  not:
+                    required: [id_motivo]
+                  properties:
+                    estado:
+                      type: string
+                      enum: [ENTREGADO]
+                    foto:
+                      type: string
+                      format: binary
+                      description: JPEG o PNG real de hasta 5242880 bytes
+                    observacion:
+                      type: string
+                      description: Opcional, hasta 65535 bytes UTF-8
+                - type: object
+                  required: [estado, id_motivo, observacion]
+                  not:
+                    required: [foto]
+                  properties:
+                    estado:
+                      type: string
+                      enum: [FALLIDO]
+                    id_motivo:
+                      type: integer
+                      minimum: 1
+                      description: ID de GET /api/v1/failure-reasons o GET /api/v1/catalogs
+                    observacion:
+                      type: string
+                      minLength: 1
+                      description: Obligatoria y no vacia tras recortar espacios, hasta 65535 bytes UTF-8
+      responses:
+        '200':
+          description: Estado final e historial guardados; lote cerrado si ya no quedan pendientes
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, tracking_id, estado, fecha, tiene_evidencia, lote]
+                properties:
+                  id:
+                    type: integer
+                  tracking_id:
+                    type: string
+                  estado:
+                    type: string
+                    enum: [ENTREGADO, FALLIDO]
+                  fecha:
+                    type: string
+                    format: date-time
+                  tiene_evidencia:
+                    type: boolean
+                  lote:
+                    type: object
+                    required: [id, estado, closed_at]
+                    properties:
+                      id:
+                        type: integer
+                      estado:
+                        type: string
+                        enum: [EN_RUTA, CERRADO]
+                      closed_at:
+                        type: string
+                        format: date-time
+                        nullable: true
+              example:
+                id: 42
+                tracking_id: RIVA-A1B2C3D4
+                estado: ENTREGADO
+                fecha: '2026-10-24T10:30:00-05:00'
+                tiene_evidencia: true
+                lote:
+                  id: 210
+                  estado: CERRADO
+                  closed_at: '2026-10-24T10:30:00-05:00'
+        '400':
+          description: El lote o el paquete no estan EN_RUTA
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Rol no permitido, cambio inicial pendiente o paquete ajeno
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: El paquete no existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Paquete ya finalizado o conflicto concurrente; sin duplicar historial
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Formulario, motivo o foto invalidos; imagen incompleta, demasiado grande o de otro formato
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: No se pudo confirmar el resultado; consultar el paquete antes de reintentar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Almacenamiento privado o soporte de imagen no disponible; sin cambio de estado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/v1/packages/{id}/deliver:
     post:
@@ -1100,6 +1736,29 @@ components:
             error: validacion_fallida
 
   schemas:
+    StartRouteResponse:
+      type: object
+      required: [id, codigo, estado, started_at, cantidad_paquetes]
+      properties:
+        id:
+          type: integer
+          example: 210
+        codigo:
+          type: string
+          example: L-ABC123
+        estado:
+          type: string
+          enum: [EN_RUTA]
+        started_at:
+          type: string
+          format: date-time
+          description: Hora de salida en ISO 8601 con zona horaria de Lima; se guarda en UTC.
+          example: '2026-10-24T10:30:00-05:00'
+        cantidad_paquetes:
+          type: integer
+          minimum: 1
+          example: 2
+
     RegisterPackageRequest:
       type: object
       additionalProperties: false
@@ -1219,6 +1878,8 @@ components:
         fecha_ingreso:
           type: string
           format: date-time
+          description: Fecha de registro en hora de Lima (-05:00); se almacena en UTC.
+          example: '2026-10-24T10:00:00-05:00'
         cotizacion:
           type: object
           required: [id_tarifa, monto]

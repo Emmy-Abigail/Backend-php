@@ -9,6 +9,7 @@ use App\Application\Exception\BatchAlreadyDispatched;
 use App\Application\Exception\BatchHasNoPackages;
 use App\Application\Exception\BatchNotFound;
 use App\Application\Exception\BatchVersionMismatch;
+use App\Application\Exception\BatchWeightExceeded;
 use App\Application\Exception\DispatchSnapshotChanged;
 use App\Application\Exception\DriverNotAvailable;
 use App\Application\Exception\InvalidCatalogReference;
@@ -163,6 +164,7 @@ final class DispatchBatchActionTest extends TestCase
     public static function failures(): array
     {
         return [
+            'lote excede peso del vehiculo' => [new BatchWeightExceeded('El peso total del lote supera la capacidad del vehiculo'), 409, 'capacidad_excedida'],
             'lote inexistente' => [new BatchNotFound('El lote no existe'), 404, 'lote_no_encontrado'],
             'lote de otra sede' => [new BatchAccessDenied('No puede despachar lotes de otra sede'), 403, 'sin_permisos'],
             'usuario sin permiso' => [new UserNotAllowed('no'), 403, 'sin_permisos'],

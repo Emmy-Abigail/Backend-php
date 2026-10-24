@@ -20,6 +20,7 @@ services:
       JWT_TTL_SECONDS: "${JWT_TTL_SECONDS:?JWT_TTL_SECONDS must be set}"
     volumes:
       - ./.env:/var/www/.env:ro
+      - riva_evidence_data:/var/www/var/evidence
     depends_on:
       db:
         condition: service_healthy
@@ -46,3 +47,4 @@ services:
 
 volumes:
   riva_mysql_data:
+  riva_evidence_data:
