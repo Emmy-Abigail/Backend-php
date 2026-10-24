@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Application\Port\In\Package;
 
+use App\Application\Port\In\Batch\LimaTime;
 use App\Application\Port\Out\Pricing\PackageQuote;
+use DateTimeImmutable;
+use DateTimeZone;
 
 final readonly class RegisterPackageResult
 {
@@ -25,7 +28,7 @@ final readonly class RegisterPackageResult
             'id' => $this->id,
             'tracking_id' => $this->tracking,
             'estado' => 'EN_ALMACEN',
-            'fecha_ingreso' => $this->registeredAt,
+            'fecha_ingreso' => LimaTime::format(new DateTimeImmutable($this->registeredAt, new DateTimeZone('UTC'))),
             'cotizacion' => ['id_tarifa' => $this->quote->tariffId, 'monto' => (float) $this->quote->amount],
             'lote' => $this->batch,
         ];

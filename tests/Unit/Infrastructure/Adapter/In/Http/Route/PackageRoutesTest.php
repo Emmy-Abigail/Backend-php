@@ -106,6 +106,7 @@ final class PackageRoutesTest extends TestCase
         $body = json_decode((string) $response->getBody(), true);
         self::assertSame('AB23456789', $body['tracking_id']);
         self::assertSame('EN_ALMACEN', $body['estado']);
+        self::assertSame('2026-10-21T07:00:00-05:00', $body['fecha_ingreso']);
         self::assertSame(20, $body['lote']['id']);
     }
 
@@ -194,7 +195,30 @@ final class PackageRoutesTest extends TestCase
             ['page=abc', 'page'],
             ['per_page=101', 'per_page'],
             ['q=' . str_repeat('a', 101), 'q'],
+            ['estado[]=EN_RUTA', 'estado'],
+            ['q[]=ana', 'q'],
+            ['desde[]=2026-10-24', 'desde'],
+            ['hasta[]=2026-10-24', 'hasta'],
+            ['page[]=2', 'page'],
+            ['per_page[]=20', 'per_page'],
+            ['page=99999999999999999999999999999999', 'page'],
+            ['per_page=99999999999999999999999999999999', 'per_page'],
+            ['page=' . PHP_INT_MAX, 'page'],
+            ['page=' . (intdiv(PHP_INT_MAX, 20) + 2), 'page'],
         ];
+    }
+
+    public function test_list_accepts_the_largest_page_with_a_safe_offset(): void
+    {
+        $page = intdiv(PHP_INT_MAX, 20) + 1;
+        $listUseCase = $this->createMock(ListPackagesUseCase::class);
+        $listUseCase->expects($this->once())->method('execute')
+            ->with($this->callback(static fn (ListPackagesQuery $query): bool => $query->page === $page && $query->perPage === 20))
+            ->willReturn(new ListPackagesResult([], 0, $page, 20));
+        $response = $this->app($this->createStub(RegisterPackageUseCase::class), listUseCase: $listUseCase)
+            ->handle($this->listRequest('page=' . $page));
+
+        self::assertSame(200, $response->getStatusCode());
     }
 
     private function detailRequest(string $id = '1', bool $token = true): \Psr\Http\Message\ServerRequestInterface

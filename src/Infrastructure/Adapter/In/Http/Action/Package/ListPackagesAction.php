@@ -31,6 +31,12 @@ final readonly class ListPackagesAction
         $params = $request->getQueryParams();
         $errors = [];
 
+        foreach (['q', 'estado', 'desde', 'hasta'] as $field) {
+            if (array_key_exists($field, $params) && !is_string($params[$field])) {
+                $errors[$field] = 'Debe ser un texto, no una lista ni un objeto';
+            }
+        }
+
         $search = $this->text($params['q'] ?? null);
         if ($search !== null && mb_strlen($search) > 100) {
             $errors['q'] = 'La búsqueda no puede superar 100 caracteres';
@@ -63,6 +69,10 @@ final readonly class ListPackagesAction
         $perPage = $this->positiveInt($params['per_page'] ?? null, 20);
         if ($perPage === null || $perPage > self::MAX_PER_PAGE) {
             $errors['per_page'] = 'Debe ser un entero entre 1 y ' . self::MAX_PER_PAGE;
+        }
+        if ($page !== null && $perPage !== null && $perPage <= self::MAX_PER_PAGE
+            && $page - 1 > intdiv(PHP_INT_MAX, $perPage)) {
+            $errors['page'] = 'La pagina solicitada excede el rango permitido';
         }
 
         if ($errors !== []) {
@@ -100,7 +110,15 @@ final readonly class ListPackagesAction
         if ($value === null || $value === '') {
             return $default;
         }
-        if (!is_string($value) || !ctype_digit($value) || (int) $value < 1) {
+        if (!is_string($value) || !ctype_digit($value)) {
+            return null;
+        }
+
+        // Comprobar el rango ANTES del cast: PHP satura los enteros demasiado grandes.
+        $value = ltrim($value, '0');
+        $max = (string) PHP_INT_MAX;
+        if ($value === '' || strlen($value) > strlen($max)
+            || (strlen($value) === strlen($max) && strcmp($value, $max) > 0)) {
             return null;
         }
 

@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Adapter\Out\Persistence\MySQL;
 
+use App\Application\Port\In\Batch\LimaTime;
 use App\Application\Port\In\Package\ListPackagesResult;
 use App\Application\Port\Out\Persistence\PackageDetail;
 use App\Application\Port\Out\Persistence\PackageQueryRepository;
 use DateTimeImmutable;
+use DateTimeZone;
 use Illuminate\Database\Connection;
 use Illuminate\Database\Query\Builder;
 
@@ -43,12 +45,11 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
             $query->where('e.codigo', $status);
         }
         if ($from !== null) {
-            $query->where('p.fecha_ingreso', '>=', $from . ' 00:00:00');
+            $query->where('p.fecha_ingreso', '>=', $this->dayBoundaryUtc($from));
         }
         if ($to !== null) {
             // Incluye todo el día "hasta".
-            $nextDay = (new DateTimeImmutable($to))->modify('+1 day')->format('Y-m-d');
-            $query->where('p.fecha_ingreso', '<', $nextDay . ' 00:00:00');
+            $query->where('p.fecha_ingreso', '<', $this->dayBoundaryUtc($to, nextDay: true));
         }
 
         $total = (clone $query)->count();
@@ -94,7 +95,7 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
                 ],
                 'id_lote' => $row->id_lote === null ? null : (int) $row->id_lote,
                 'orden_parada' => $row->orden_parada === null ? null : (int) $row->orden_parada,
-                'fecha_ingreso' => $row->fecha_ingreso,
+                'fecha_ingreso' => $this->formatDate($row->fecha_ingreso),
             ];
         }
 
@@ -109,6 +110,7 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
             ->join('sedes as s', 's.id', '=', 'p.id_sede')
             ->join('clientes as c', 'c.id', '=', 'p.id_remitente')
             ->leftJoin('lotes as l', 'l.id', '=', 'p.id_lote')
+            ->leftJoin('tipos_vehiculo as v', 'v.id', '=', 'l.id_tipo_vehiculo')
             ->leftJoin('usuarios as u', 'u.id', '=', 'l.id_conductor')
             ->where('p.id', $packageId)
             ->first([
@@ -141,6 +143,9 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
                 'p.id_lote',
                 'l.codigo as lote_codigo',
                 'l.estado as lote_estado',
+                'v.id as vehiculo_id',
+                'v.codigo as vehiculo_codigo',
+                'v.nombre as vehiculo_nombre',
                 'l.id_conductor',
                 'u.nombres as conductor_nombres',
                 'u.placa as conductor_placa',
@@ -179,6 +184,11 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
                 'alto_cm' => (float) $row->alto_cm,
             ],
             'costo_estimado' => (string) $row->costo_estimado,
+            'vehiculo' => $row->vehiculo_id === null ? null : [
+                'id' => (int) $row->vehiculo_id,
+                'codigo' => $row->vehiculo_codigo,
+                'nombre' => $row->vehiculo_nombre,
+            ],
             'remitente' => [
                 'tipo_documento' => $row->remitente_tipo_documento,
                 'numero_documento' => $row->remitente_numero_documento,
@@ -196,7 +206,7 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
                     'placa' => $row->conductor_placa,
                 ],
             ],
-            'fecha_ingreso' => $row->fecha_ingreso,
+            'fecha_ingreso' => $this->formatDate($row->fecha_ingreso),
         ];
 
         return new PackageDetail(
@@ -238,7 +248,7 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
                 'estado_anterior' => $row->anterior,
                 'estado_nuevo' => $row->nuevo,
                 'estado_nuevo_nombre' => $row->nuevo_nombre,
-                'fecha' => $row->created_at,
+                'fecha' => $this->formatDate($row->created_at),
                 'usuario' => ['nombres' => $row->usuario, 'rol' => $row->usuario_rol],
                 'motivo_fallo' => $row->motivo_codigo === null ? null : ['codigo' => $row->motivo_codigo, 'nombre' => $row->motivo_nombre],
                 'comentario' => $row->comentario,
@@ -248,5 +258,21 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
         }
 
         return $history;
+    }
+
+    /** Los filtros representan dias de Lima, pero la BD guarda UTC. */
+    private function dayBoundaryUtc(string $date, bool $nextDay = false): string
+    {
+        $boundary = new DateTimeImmutable($date . ' 00:00:00', new DateTimeZone('America/Lima'));
+        if ($nextDay) {
+            $boundary = $boundary->modify('+1 day');
+        }
+
+        return $boundary->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
+    }
+
+    private function formatDate(string $date): string
+    {
+        return LimaTime::format(new DateTimeImmutable($date, new DateTimeZone('UTC')));
     }
 }
