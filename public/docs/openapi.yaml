@@ -27,6 +27,7 @@ tags:
   - name: CatÃ¡logos
   - name: Cotizaciones
   - name: Paquetes (prÃ³ximamente)
+  - name: Lotes
   - name: Lotes (prÃ³ximamente)
   - name: Conductor (prÃ³ximamente)
   - name: Entregas (prÃ³ximamente)
@@ -991,11 +992,61 @@ paths:
 
   /api/v1/batches:
     get:
-      tags: [Lotes (prÃ³ximamente)]
-      summary: '[Pendiente] Listar lotes'
+      tags: [Lotes]
+      summary: Listar lotes
+      description: |
+        Requiere rol OPERADOR o CONDUCTOR.
+
+        - **Operador:** lotes de su sede (la sede sale de la sesion). Sin filtro `estado` devuelve todos los estados.
+        - **Conductor:** solo sus lotes. Sin filtro `estado` devuelve los Asignados y En Ruta.
+
+        Orden: los lotes `EN_PREPARACION` salen del mas antiguo al mas nuevo (es el que se despacha primero);
+        el resto, del mas nuevo al mas antiguo. Los lotes se crean solos al registrar un paquete y el conductor
+        se asigna al despachar.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: estado
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [EN_PREPARACION, ASIGNADO, EN_RUTA, CERRADO]
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
       responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
+        '200':
+          description: Pagina de lotes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: Filtro invalido (estado, page o size)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: El filtro estado debe ser EN_PREPARACION, ASIGNADO, EN_RUTA o CERRADO
+                error: filtro_invalido
     post:
       tags: [Lotes (prÃ³ximamente)]
       summary: '[Pendiente] Crear lote'
@@ -1005,13 +1056,160 @@ paths:
 
   /api/v1/batches/{id}:
     get:
-      tags: [Lotes (prÃ³ximamente)]
-      summary: '[Pendiente] Consultar lote'
+      tags: [Lotes]
+      summary: Consultar un lote
+      description: |
+        Requiere rol OPERADOR o CONDUCTOR.
+
+        - **Operador** (solo lotes de su sede): resumen, progreso, paquetes, `version` y, si el lote esta
+          `EN_PREPARACION`, los conductores disponibles con su placa. Son los activos que manejan el mismo tipo de
+          vehiculo del lote y tienen menos de 3 lotes pendientes (Asignados o En Ruta); primero los que no estan
+          en ruta. No incluye datos personales del destinatario.
+        - **Conductor** (solo sus lotes): resumen, progreso y las paradas en orden de entrega, con destinatario y direccion.
+
+        Envie la `version` recibida al despachar.
+      security:
+        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/BatchId'
       responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
+        '200':
+          description: Detalle del lote (la forma depende del rol)
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/BatchDetailOperatorResponse'
+                  - $ref: '#/components/schemas/BatchDetailDriverResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Lote de otra sede o de otro conductor, o rol sin permiso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: No puede ver lotes de otra sede
+                error: sin_permisos
+        '404':
+          description: El lote no existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: El lote no existe
+                error: lote_no_encontrado
+        '422':
+          description: Id invalido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: El id del lote no es valido
+                error: id_invalido
+
+  /api/v1/batches/{id}/dispatch:
+    post:
+      tags: [Lotes]
+      summary: Despachar un lote a un conductor
+      description: |
+        Requiere rol OPERADOR y un lote de su sede en estado `EN_PREPARACION`.
+
+        1. Lee el lote y pide a Python el orden de las paradas (vecino mas cercano desde la sede).
+        2. En una sola transaccion bloquea el lote, sus paquetes y el conductor, y revalida todo.
+        3. Guarda el conductor, el operador que despacha y la fecha; pasa el lote a `ASIGNADO` y sus paquetes a
+           `ASIGNADO` con su numero de parada; registra un evento de historial por paquete; incrementa `version`.
+
+        Si entra un paquete nuevo mientras se calcula la ruta, el despacho se repite (hasta 3 intentos) para que el
+        orden incluya todos los paquetes del lote.
+
+        El conductor debe estar activo, manejar el tipo de vehiculo del lote y tener menos de 3 lotes pendientes.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/BatchId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DispatchBatchRequest'
+            example:
+              id_conductor: 31
+              version: 0
+      responses:
+        '200':
+          description: Lote despachado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DispatchBatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Lote de otra sede, rol sin permiso o contrasena temporal sin cambiar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: No puede despachar lotes de otra sede
+                error: sin_permisos
+        '404':
+          description: El lote no existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: El lote no existe
+                error: lote_no_encontrado
+        '409':
+          description: |
+            Conflicto. `error` puede ser:
+            `lote_ya_despachado` (otro operador se adelanto; el mensaje nombra al operador y al conductor),
+            `version_desactualizada` (la version enviada no es la actual),
+            `lote_cambio` (el lote cambio durante el despacho y se agotaron los reintentos),
+            `lote_vacio` o
+            `conductor_no_disponible` (inactivo o con 3 lotes pendientes).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                loteYaDespachado:
+                  value:
+                    message: Este lote ya fue despachado por Ana Torres a Luis Ramos
+                    error: lote_ya_despachado
+                conductorNoDisponible:
+                  value:
+                    message: El conductor ya no esta disponible
+                    error: conductor_no_disponible
+        '422':
+          description: |
+            Cuerpo o id invalidos (`campo_obligatorio`, `campo_invalido`, `id_invalido`) o conductor inexistente
+            o que no maneja el tipo de vehiculo del lote (`referencia_invalida`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: El conductor no maneja el tipo de vehiculo del lote
+                error: referencia_invalida
+        '503':
+          description: El servicio de rutas (Python) no esta disponible. No se guarda nada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: Servicio de rutas no disponible
+                error: ruta_no_disponible
 
   /api/v1/batches/{id}/assignment:
     patch:
@@ -1640,6 +1838,316 @@ components:
             nombre:
               type: string
               example: Sede Norte
+
+    BatchSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 210
+        codigo:
+          type: string
+          example: L-1A2B3C4D5E6F70
+        estado:
+          type: string
+          enum: [EN_PREPARACION, ASIGNADO, EN_RUTA, CERRADO]
+        version:
+          type: integer
+          description: Se incrementa al despachar. Se envia en el despacho.
+          example: 0
+        sede:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 1
+            nombre:
+              type: string
+              example: Sede Norte
+        zona_destino:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 3
+            codigo:
+              type: string
+              example: SUR
+            nombre:
+              type: string
+              example: Sur
+        vehiculo:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 1
+            codigo:
+              type: string
+              example: MOTORIZADO
+            nombre:
+              type: string
+              example: Motorizado
+        cantidad_paquetes:
+          type: integer
+          example: 4
+        peso_total_kg:
+          type: number
+          example: 8.5
+        conductor:
+          type: object
+          nullable: true
+          description: null mientras el lote esta en preparacion.
+          properties:
+            id:
+              type: integer
+              example: 31
+            nombres:
+              type: string
+              example: Juan Perez
+            placa:
+              type: string
+              nullable: true
+              example: AB5555
+        created_at:
+          type: string
+          format: date-time
+          description: Hora de Lima.
+          example: "2026-10-21T08:00:00-05:00"
+        despachado_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    BatchListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchSummary'
+        meta:
+          type: object
+          properties:
+            page:
+              type: integer
+              example: 1
+            size:
+              type: integer
+              example: 20
+            total:
+              type: integer
+              example: 5
+            total_pages:
+              type: integer
+              example: 1
+
+    BatchProgress:
+      type: object
+      properties:
+        total:
+          type: integer
+          example: 4
+        por_estado:
+          type: object
+          description: Cantidad de paquetes por estado.
+          properties:
+            EN_ALMACEN:
+              type: integer
+            ASIGNADO:
+              type: integer
+            EN_RUTA:
+              type: integer
+            ENTREGADO:
+              type: integer
+            FALLIDO:
+              type: integer
+
+    BatchDetailOperatorResponse:
+      allOf:
+        - $ref: '#/components/schemas/BatchSummary'
+        - type: object
+          properties:
+            progreso:
+              $ref: '#/components/schemas/BatchProgress'
+            paquetes:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  tracking_id:
+                    type: string
+                  estado:
+                    type: string
+                    example: EN_ALMACEN
+                  orden_parada:
+                    type: integer
+                    nullable: true
+                  distrito:
+                    type: object
+                    properties:
+                      ubigeo:
+                        type: string
+                        example: "150122"
+                      nombre:
+                        type: string
+                        example: Miraflores
+                  peso_kg:
+                    type: number
+                    example: 2
+                  lado_mayor_cm:
+                    type: number
+                    example: 30
+                  fecha_ingreso:
+                    type: string
+                    format: date-time
+            conductores_disponibles:
+              type: array
+              description: Solo se llena si el lote esta EN_PREPARACION.
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  nombres:
+                    type: string
+                  placa:
+                    type: string
+                    nullable: true
+                  lotes_pendientes:
+                    type: integer
+                    example: 1
+                  en_ruta:
+                    type: boolean
+
+    BatchDetailDriverResponse:
+      allOf:
+        - $ref: '#/components/schemas/BatchSummary'
+        - type: object
+          properties:
+            progreso:
+              $ref: '#/components/schemas/BatchProgress'
+            paradas:
+              type: array
+              description: Paradas en orden de entrega.
+              items:
+                type: object
+                properties:
+                  orden:
+                    type: integer
+                    example: 1
+                  id_paquete:
+                    type: integer
+                  tracking_id:
+                    type: string
+                  estado:
+                    type: string
+                    example: ASIGNADO
+                  distrito:
+                    type: object
+                    properties:
+                      ubigeo:
+                        type: string
+                      nombre:
+                        type: string
+                  destinatario:
+                    type: object
+                    properties:
+                      nombres:
+                        type: string
+                      dni:
+                        type: string
+                      celular:
+                        type: string
+                  direccion:
+                    type: object
+                    properties:
+                      tipo_via:
+                        type: string
+                      nombre_via:
+                        type: string
+                      numero:
+                        type: string
+                        nullable: true
+                      manzana:
+                        type: string
+                        nullable: true
+                      lote:
+                        type: string
+                        nullable: true
+                      referencia:
+                        type: string
+                        nullable: true
+
+    DispatchBatchRequest:
+      type: object
+      required: [id_conductor, version]
+      properties:
+        id_conductor:
+          type: integer
+          minimum: 1
+          example: 31
+        version:
+          type: integer
+          minimum: 0
+          description: Version del lote tal como la devolvio la consulta.
+          example: 0
+
+    DispatchBatchResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 210
+        codigo:
+          type: string
+        estado:
+          type: string
+          example: ASIGNADO
+        version:
+          type: integer
+          example: 1
+        conductor:
+          type: object
+          properties:
+            id:
+              type: integer
+            nombres:
+              type: string
+            placa:
+              type: string
+              nullable: true
+        despachado_por:
+          type: object
+          properties:
+            id:
+              type: integer
+            nombres:
+              type: string
+        despachado_at:
+          type: string
+          format: date-time
+        paradas:
+          type: array
+          items:
+            type: object
+            properties:
+              orden:
+                type: integer
+                example: 1
+              id_paquete:
+                type: integer
+              tracking_id:
+                type: string
+              distrito:
+                type: object
+                properties:
+                  ubigeo:
+                    type: string
+                  nombre:
+                    type: string
 
     ErrorResponse:
       type: object
