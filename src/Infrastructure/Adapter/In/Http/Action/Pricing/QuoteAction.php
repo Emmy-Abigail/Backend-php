@@ -9,7 +9,9 @@ use App\Application\Exception\TariffNotConfigured;
 use App\Application\Port\In\Auth\AuthenticatedUser;
 use App\Application\Port\In\Pricing\QuoteShipmentCommand;
 use App\Application\Port\In\Pricing\QuoteShipmentUseCase;
+use App\Domain\Package\DecimalQuantity;
 use App\Domain\Pricing\InvalidPricingInput;
+use InvalidArgumentException;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -54,10 +56,14 @@ final readonly class QuoteAction
                 return $this->json($response, ['message' => sprintf('El campo %s es obligatorio', $field), 'error' => 'campo_obligatorio'], 422);
             }
 
-            $text = $this->numberToString($raw);
+            $scale = $field === 'peso_kg' ? 2 : 1;
+            $text = $this->numberToString($raw, $scale);
 
             if ($text === null) {
-                return $this->json($response, ['message' => sprintf('El campo %s debe ser numérico', $field), 'error' => 'campo_invalido'], 422);
+                return $this->json($response, [
+                    'message' => sprintf('El campo %s debe ser un numero decimal positivo con hasta %d %s', $field, $scale, $scale === 1 ? 'decimal' : 'decimales'),
+                    'error' => 'campo_invalido',
+                ], 422);
             }
 
             $numbers[$field] = $text;
@@ -98,27 +104,17 @@ final readonly class QuoteAction
     }
 
     /**
-     * Convierte el valor del JSON a texto decimal; null si no es un número válido.
+     * Usa la misma precision decimal que el registro; normaliza ceros sin redondear.
      */
-    private function numberToString(mixed $value): ?string
+    private function numberToString(mixed $value, int $scale): ?string
     {
-        if (is_int($value)) {
-            return (string) $value;
+        try {
+            $units = DecimalQuantity::units($value, $scale);
+        } catch (InvalidArgumentException) {
+            return null;
         }
 
-        if (is_float($value)) {
-            if (!is_finite($value)) {
-                return null;
-            }
-
-            return rtrim(rtrim(number_format($value, 6, '.', ''), '0'), '.');
-        }
-
-        if (is_string($value)) {
-            return trim($value);
-        }
-
-        return null;
+        return rtrim(rtrim(DecimalQuantity::format($units, $scale), '0'), '.');
     }
 
     /**
