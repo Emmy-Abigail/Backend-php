@@ -625,10 +625,120 @@ paths:
   /api/v1/packages:
     get:
       tags: [Paquetes (prÃ³ximamente)]
-      summary: '[Pendiente] Listar paquetes'
+      summary: Listar paquetes de la sede del operador
+      operationId: listPackages
+      description: |
+        Solo OPERADOR con sede y cambio inicial de password completado.
+        La sede sale de la sesion; no se acepta como parametro.
+        Ordena del ingreso mas reciente al mas antiguo.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          description: Busca por inicio de tracking o DNI del destinatario, o por parte de su nombre. Maximo 100 caracteres.
+          schema:
+            type: string
+            example: '7123'
+        - name: estado
+          in: query
+          schema:
+            type: string
+            enum: [EN_ALMACEN, ASIGNADO, EN_RUTA, ENTREGADO, FALLIDO]
+        - name: desde
+          in: query
+          description: Fecha de ingreso desde (inclusive), AAAA-MM-DD.
+          schema:
+            type: string
+            format: date
+        - name: hasta
+          in: query
+          description: Fecha de ingreso hasta (inclusive), AAAA-MM-DD.
+          schema:
+            type: string
+            format: date
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
       responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
+        '200':
+          description: Pagina de paquetes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        tracking_id:
+                          type: string
+                        destinatario:
+                          type: object
+                          properties:
+                            nombres:
+                              type: string
+                            dni:
+                              type: string
+                        destino:
+                          type: object
+                          properties:
+                            ubigeo:
+                              type: string
+                            distrito:
+                              type: string
+                        peso_kg:
+                          type: number
+                        costo_estimado:
+                          type: string
+                          example: '15.50'
+                        estado:
+                          type: object
+                          properties:
+                            codigo:
+                              type: string
+                            nombre:
+                              type: string
+                        id_lote:
+                          type: integer
+                          nullable: true
+                        orden_parada:
+                          type: integer
+                          nullable: true
+                        fecha_ingreso:
+                          type: string
+                          example: '2026-10-22 10:15:00'
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      per_page:
+                        type: integer
+                      total:
+                        type: integer
+                      total_pages:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
     post:
       tags: [Paquetes (prÃ³ximamente)]
       summary: Registrar paquete con asignacion automatica de lote
@@ -697,12 +807,178 @@ paths:
   /api/v1/packages/{id}:
     get:
       tags: [Paquetes (prÃ³ximamente)]
-      summary: '[Pendiente] Consultar paquete por ID'
+      summary: Consultar el detalle e historial de un paquete
+      operationId: getPackage
+      description: |
+        OPERADOR: solo paquetes de su sede; ve el detalle completo.
+        CONDUCTOR: solo paquetes de un lote asignado a el en estado ASIGNADO o EN_RUTA;
+        no recibe remitente ni costo_estimado.
+        Ambos deben haber completado el cambio inicial de password.
+        El historial va del cambio mas antiguo al mas reciente y no expone la ubicacion de la evidencia.
+      security:
+        - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/PackageId'
       responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
+        '200':
+          description: Detalle del paquete con historial
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  tracking_id:
+                    type: string
+                  sede:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                      nombre:
+                        type: string
+                  estado:
+                    type: object
+                    properties:
+                      codigo:
+                        type: string
+                      nombre:
+                        type: string
+                  destinatario:
+                    type: object
+                    properties:
+                      nombres:
+                        type: string
+                      dni:
+                        type: string
+                      celular:
+                        type: string
+                  direccion:
+                    type: object
+                    properties:
+                      ubigeo:
+                        type: string
+                      distrito:
+                        type: string
+                      tipo_via:
+                        type: string
+                      nombre_via:
+                        type: string
+                      numero:
+                        type: string
+                        nullable: true
+                      manzana:
+                        type: string
+                        nullable: true
+                      lote:
+                        type: string
+                        nullable: true
+                      referencia:
+                        type: string
+                        nullable: true
+                  medidas:
+                    type: object
+                    properties:
+                      peso_kg:
+                        type: number
+                      largo_cm:
+                        type: number
+                      ancho_cm:
+                        type: number
+                      alto_cm:
+                        type: number
+                  costo_estimado:
+                    type: string
+                    description: Solo para OPERADOR.
+                  remitente:
+                    type: object
+                    description: Solo para OPERADOR.
+                    properties:
+                      tipo_documento:
+                        type: string
+                      numero_documento:
+                        type: string
+                      nombres:
+                        type: string
+                      celular:
+                        type: string
+                  lote:
+                    type: object
+                    nullable: true
+                    properties:
+                      id:
+                        type: integer
+                      codigo:
+                        type: string
+                      estado:
+                        type: string
+                      orden_parada:
+                        type: integer
+                        nullable: true
+                      conductor:
+                        type: object
+                        nullable: true
+                        properties:
+                          id:
+                            type: integer
+                          nombres:
+                            type: string
+                          placa:
+                            type: string
+                            nullable: true
+                  fecha_ingreso:
+                    type: string
+                  historial:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        estado_anterior:
+                          type: string
+                          nullable: true
+                        estado_nuevo:
+                          type: string
+                        estado_nuevo_nombre:
+                          type: string
+                        fecha:
+                          type: string
+                        usuario:
+                          type: object
+                          properties:
+                            nombres:
+                              type: string
+                            rol:
+                              type: string
+                        motivo_fallo:
+                          type: object
+                          nullable: true
+                          properties:
+                            codigo:
+                              type: string
+                            nombre:
+                              type: string
+                        comentario:
+                          type: string
+                          nullable: true
+                        tiene_evidencia:
+                          type: boolean
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: El paquete no existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '422':
+          description: El id no es un entero positivo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
 
   /api/v1/packages/{id}/history:
     get:

@@ -15,6 +15,8 @@ use App\Application\Service\Catalog\GetGeographyService;
 use App\Application\Service\Catalog\GetSedesService;
 use App\Application\Service\Catalog\GetVehicleTypesService;
 use App\Application\Service\Pricing\QuoteShipmentService;
+use App\Application\Service\Package\GetPackageService;
+use App\Application\Service\Package\ListPackagesService;
 use App\Application\Service\Package\RegisterPackageService;
 use App\Application\Service\User\ChangeUserStatusService;
 use App\Application\Service\User\CreateUserService;
@@ -34,6 +36,8 @@ use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetGeographyAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetSedesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetVehicleTypesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Pricing\QuoteAction;
+use App\Infrastructure\Adapter\In\Http\Action\Package\GetPackageAction;
+use App\Infrastructure\Adapter\In\Http\Action\Package\ListPackagesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\RegisterPackageAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\ChangeUserStatusAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\CreateUserAction;
@@ -45,6 +49,7 @@ use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
 use App\Infrastructure\Adapter\Out\Notification\SmtpUserCredentialsMailer;
 use App\Infrastructure\Adapter\Out\Assignment\HttpBatchAssignmentGateway;
 use App\Infrastructure\Adapter\Out\Http\StreamHttpTransport;
+use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageQueryRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlBatchDispatchRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlBatchReadRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageRegistrationRepository;
@@ -187,8 +192,20 @@ $registerPackageAction = new RegisterPackageAction(new RegisterPackageService(
     ),
     new RandomTrackingGenerator(),
 ));
+$packageQueryRepository = new MySqlPackageQueryRepository(Capsule::connection());
+$listPackagesAction = new ListPackagesAction(new ListPackagesService($packageQueryRepository));
+$getPackageAction = new GetPackageAction(new GetPackageService($packageQueryRepository));
 $registerPackageRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/PackageRoutes.php';
-$registerPackageRoutes($app, $registerPackageAction, $jwtAuthMiddleware, new RoleMiddleware('OPERADOR'), $mustChangePasswordMiddleware);
+$registerPackageRoutes(
+    $app,
+    $registerPackageAction,
+    $listPackagesAction,
+    $getPackageAction,
+    $jwtAuthMiddleware,
+    new RoleMiddleware('OPERADOR'),
+    $mustChangePasswordMiddleware,
+    new RoleMiddleware('OPERADOR', 'CONDUCTOR'),
+);
 
 // Lotes: consulta (Operador y Conductor) y despacho (Operador). El orden de las paradas lo calcula Python.
 // La ruta usa el mismo servicio que la asignación, salvo que se definan las variables ROUTE_*.
