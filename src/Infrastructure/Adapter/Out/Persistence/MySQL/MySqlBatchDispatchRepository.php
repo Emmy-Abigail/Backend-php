@@ -9,6 +9,7 @@ use App\Application\Exception\BatchAlreadyDispatched;
 use App\Application\Exception\BatchHasNoPackages;
 use App\Application\Exception\BatchNotFound;
 use App\Application\Exception\BatchVersionMismatch;
+use App\Application\Exception\BatchWeightExceeded;
 use App\Application\Exception\DispatchSnapshotChanged;
 use App\Application\Exception\DriverNotAvailable;
 use App\Application\Exception\InvalidCatalogReference;
@@ -19,6 +20,7 @@ use App\Application\Port\Out\Batch\DispatchSnapshot;
 use App\Application\Port\Out\Route\RouteStop;
 use App\Domain\Batch\BatchStatus;
 use App\Domain\Batch\DriverAvailability;
+use App\Domain\Package\DecimalQuantity;
 use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Database\Connection;
@@ -113,17 +115,30 @@ final readonly class MySqlBatchDispatchRepository implements BatchDispatchReposi
         $packages = $this->connection->table('paquetes')
             ->where('id_lote', $batch->id)
             ->lockForUpdate()
-            ->get(['id', 'estado_actual_id']);
+            ->get(['id', 'estado_actual_id', 'peso_kg']);
         $currentIds = $packages->pluck('id')->map(static fn ($id): int => (int) $id)->sort()->values()->all();
         $expectedIds = $orderedPackageIds;
         sort($expectedIds);
         if ($currentIds !== $expectedIds) {
             throw new DispatchSnapshotChanged('Los paquetes del lote cambiaron');
         }
+        $totalWeight = 0;
         foreach ($packages as $package) {
             if ((int) $package->estado_actual_id !== (int) $states->get('EN_ALMACEN')) {
                 throw new DispatchSnapshotChanged('Un paquete del lote ya no esta en almacen');
             }
+            $totalWeight += DecimalQuantity::units($package->peso_kg, 2);
+        }
+
+        // Revalidar los pesos actuales, no los del registro ni una suma enviada por el cliente.
+        // El bloqueo compartido mantiene la capacidad vigente estable hasta confirmar el despacho.
+        $vehicle = $this->connection->table('tipos_vehiculo')->where('id', $batch->id_tipo_vehiculo)
+            ->sharedLock()->first(['peso_max_total_kg']);
+        if ($vehicle === null) {
+            throw new InvalidCatalogReference('El tipo de vehiculo del lote no existe');
+        }
+        if ($totalWeight > DecimalQuantity::units($vehicle->peso_max_total_kg, 2)) {
+            throw new BatchWeightExceeded('El peso total del lote supera la capacidad del vehiculo');
         }
 
         // El bloqueo del conductor serializa los despachos que compiten por él, de modo que

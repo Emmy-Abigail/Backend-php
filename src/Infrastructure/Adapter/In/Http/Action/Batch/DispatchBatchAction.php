@@ -9,6 +9,7 @@ use App\Application\Exception\BatchAlreadyDispatched;
 use App\Application\Exception\BatchHasNoPackages;
 use App\Application\Exception\BatchNotFound;
 use App\Application\Exception\BatchVersionMismatch;
+use App\Application\Exception\BatchWeightExceeded;
 use App\Application\Exception\DispatchSnapshotChanged;
 use App\Application\Exception\DriverNotAvailable;
 use App\Application\Exception\InvalidCatalogReference;
@@ -72,6 +73,8 @@ final readonly class DispatchBatchAction
             return $this->json($response, ['error' => 'lote_cambio', 'message' => $exception->getMessage()], 409);
         } catch (BatchHasNoPackages $exception) {
             return $this->json($response, ['error' => 'lote_vacio', 'message' => $exception->getMessage()], 409);
+        } catch (BatchWeightExceeded $exception) {
+            return $this->json($response, ['error' => 'capacidad_excedida', 'message' => $exception->getMessage()], 409);
         } catch (DriverNotAvailable $exception) {
             return $this->json($response, ['error' => 'conductor_no_disponible', 'message' => $exception->getMessage()], 409);
         } catch (InvalidCatalogReference $exception) {
