@@ -10,6 +10,9 @@ use App\Application\Service\Auth\RequestPasswordResetService;
 use App\Application\Service\Batch\DispatchBatchService;
 use App\Application\Service\Batch\GetBatchService;
 use App\Application\Service\Batch\ListBatchesService;
+use App\Application\Service\Batch\StartRouteService;
+use App\Application\Service\Delivery\FinalStatusService;
+use App\Application\Service\Delivery\GetEvidenceService;
 use App\Application\Service\Catalog\GetFailureReasonsService;
 use App\Application\Service\Catalog\GetGeographyService;
 use App\Application\Service\Catalog\GetSedesService;
@@ -30,6 +33,9 @@ use App\Infrastructure\Adapter\In\Http\Action\Auth\SessionStatusAction;
 use App\Infrastructure\Adapter\In\Http\Action\Batch\DispatchBatchAction;
 use App\Infrastructure\Adapter\In\Http\Action\Batch\GetBatchAction;
 use App\Infrastructure\Adapter\In\Http\Action\Batch\ListBatchesAction;
+use App\Infrastructure\Adapter\In\Http\Action\Batch\StartRouteAction;
+use App\Infrastructure\Adapter\In\Http\Action\Delivery\FinalStatusAction;
+use App\Infrastructure\Adapter\In\Http\Action\Delivery\GetEvidenceAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetCatalogsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetFailureReasonsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetGeographyAction;
@@ -52,6 +58,10 @@ use App\Infrastructure\Adapter\Out\Http\StreamHttpTransport;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageQueryRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlBatchDispatchRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlBatchReadRepository;
+use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlBatchRouteRepository;
+use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlFinalStatusRepository;
+use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageEvidenceRepository;
+use App\Infrastructure\Adapter\Out\Storage\LocalEvidenceStorage;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageRegistrationRepository;
 use App\Infrastructure\Adapter\Out\Pricing\LocalPackagePricing;
 use App\Infrastructure\Adapter\Out\Route\HttpRouteOptimizerGateway;
@@ -233,9 +243,38 @@ $registerBatchRoutes(
     $mustChangePasswordMiddleware,
 );
 
+$registerDriverRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/DriverRoutes.php';
+$registerDriverRoutes(
+    $app,
+    new StartRouteAction(new StartRouteService(new MySqlBatchRouteRepository(Capsule::connection()))),
+    $jwtAuthMiddleware,
+    new RoleMiddleware('CONDUCTOR'),
+    $mustChangePasswordMiddleware,
+);
+
+$evidencePath = $_ENV['EVIDENCE_STORAGE_PATH'] ?? dirname(__DIR__) . '/var/evidence';
+if (preg_match('~^(?:[A-Za-z]:[\\\\/]|/)~', $evidencePath) !== 1) {
+    $evidencePath = dirname(__DIR__) . '/' . $evidencePath;
+}
+$registerDeliveryRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/DeliveryRoutes.php';
+$evidenceStorage = new LocalEvidenceStorage($evidencePath, __DIR__);
+$registerDeliveryRoutes(
+    $app,
+    new FinalStatusAction(new FinalStatusService(
+        new MySqlFinalStatusRepository(Capsule::connection()),
+        $evidenceStorage,
+    )),
+    $jwtAuthMiddleware,
+    new RoleMiddleware('CONDUCTOR'),
+    $mustChangePasswordMiddleware,
+    new GetEvidenceAction(new GetEvidenceService(
+        new MySqlPackageEvidenceRepository(Capsule::connection()),
+        $evidenceStorage,
+    )),
+    new RoleMiddleware('OPERADOR', 'ADMINISTRADOR'),
+);
+
 $routeFiles = [
-    __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/DriverRoutes.php',
-    __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/DeliveryRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/TrackingRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/DashboardRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/ZoneRoutes.php',
