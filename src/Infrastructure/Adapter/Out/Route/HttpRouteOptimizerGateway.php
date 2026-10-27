@@ -31,7 +31,9 @@ final readonly class HttpRouteOptimizerGateway implements RouteOptimizerGateway
         $payload = [
             'id_sede' => $sedeId,
             'paradas' => array_map(
-                static fn (RouteStop $stop): array => ['id_paquete' => $stop->packageId, 'ubigeo_destino' => $stop->ubigeo],
+                static fn (RouteStop $stop): array => ['id_paquete' => $stop->packageId, 'ubigeo_destino' => $stop->ubigeo]
+                    // Solo se envían cuando existen, para no cambiar el JSON de los paquetes sin mapa.
+                    + ($stop->lat === null || $stop->lng === null ? [] : ['lat' => $stop->lat, 'lng' => $stop->lng]),
                 $stops,
             ),
         ];

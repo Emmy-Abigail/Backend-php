@@ -35,6 +35,68 @@ final class PackageDetailsTest extends TestCase
         self::assertSame(5000, PackageDetails::fromArray($body)->weightUnits);
     }
 
+    public function test_correo_y_punto_del_mapa_son_opcionales(): void
+    {
+        $details = PackageDetails::fromArray(PackageFixture::body());
+        self::assertNull($details->sender['correo']);
+        self::assertNull($details->recipient['correo']);
+        self::assertNull($details->address['lat']);
+        self::assertNull($details->address['lng']);
+
+        $body = PackageFixture::body();
+        $body['remitente']['correo'] = '';
+        $body['direccion']['lat'] = null;
+        $body['direccion']['lng'] = null;
+        self::assertNull(PackageDetails::fromArray($body)->sender['correo']);
+    }
+
+    public function test_normaliza_correos_y_coordenadas(): void
+    {
+        $body = PackageFixture::body();
+        $body['remitente']['correo'] = '  Maria.Perez@Example.COM ';
+        $body['destinatario']['correo'] = 'rosa@example.com';
+        $body['direccion']['lat'] = -12.12123456789;
+        $body['direccion']['lng'] = -77;
+        $details = PackageDetails::fromArray($body);
+
+        self::assertSame('maria.perez@example.com', $details->sender['correo']);
+        self::assertSame('rosa@example.com', $details->recipient['correo']);
+        self::assertSame('-12.121235', $details->address['lat']);
+        self::assertSame('-77.000000', $details->address['lng']);
+    }
+
+    #[DataProvider('invalidContactOrLocation')]
+    public function test_rechaza_correo_o_ubicacion_invalidos(array $changes, string $field): void
+    {
+        $body = PackageFixture::body();
+        foreach ($changes as $path => $value) {
+            [$group, $key] = explode('.', $path);
+            $body[$group][$key] = $value;
+        }
+        try {
+            PackageDetails::fromArray($body);
+            self::fail('Invalid input was accepted');
+        } catch (InvalidPackageData $exception) {
+            self::assertArrayHasKey($field, $exception->errors);
+        }
+    }
+
+    public static function invalidContactOrLocation(): array
+    {
+        return [
+            'correo sin arroba' => [['remitente.correo' => 'maria.example.com'], 'remitente.correo'],
+            'correo como numero' => [['destinatario.correo' => 123], 'destinatario.correo'],
+            'correo muy largo' => [['destinatario.correo' => str_repeat('a', 140) . '@example.com'], 'destinatario.correo'],
+            'solo latitud' => [['direccion.lat' => -12.1], 'direccion.lng'],
+            'solo longitud' => [['direccion.lng' => -77.0], 'direccion.lat'],
+            'latitud como texto' => [['direccion.lat' => '-12.1', 'direccion.lng' => -77.0], 'direccion.lat'],
+            'longitud booleana' => [['direccion.lat' => -12.1, 'direccion.lng' => true], 'direccion.lng'],
+            'fuera de Lima (Arequipa)' => [['direccion.lat' => -16.39, 'direccion.lng' => -71.53], 'direccion.lat'],
+            'latitud y longitud invertidas' => [['direccion.lat' => -77.03, 'direccion.lng' => -12.12], 'direccion.lat'],
+            'longitud en el mar' => [['direccion.lat' => -12.1, 'direccion.lng' => -77.5], 'direccion.lng'],
+        ];
+    }
+
     #[DataProvider('invalidFields')]
     public function test_rejects_invalid_fields_without_silent_rounding(array $path, mixed $value, string $field): void
     {

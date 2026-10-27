@@ -151,12 +151,16 @@ final readonly class MySqlPackageRegistrationRepository implements PackageRegist
                 }
 
                 $sender = $command->details->sender;
+                // Un registro sin correo no borra el que el cliente dio en una visita anterior.
                 $this->connection->table('clientes')->upsert([[
                     'tipo_documento' => $sender['tipo_documento'],
                     'numero_documento' => $sender['numero_documento'],
                     'nombres_razon_social' => $sender['nombres'],
                     'celular' => $sender['celular'],
-                ]], ['tipo_documento', 'numero_documento'], ['nombres_razon_social', 'celular']);
+                    'correo' => $sender['correo'],
+                ]], ['tipo_documento', 'numero_documento'], $sender['correo'] === null
+                    ? ['nombres_razon_social', 'celular']
+                    : ['nombres_razon_social', 'celular', 'correo']);
                 $senderId = $this->connection->table('clientes')->where('tipo_documento', $sender['tipo_documento'])
                     ->where('numero_documento', $sender['numero_documento'])->value('id');
 
@@ -187,6 +191,7 @@ final readonly class MySqlPackageRegistrationRepository implements PackageRegist
                     'destinatario_nombres' => $recipient['nombres'],
                     'destinatario_dni' => $recipient['dni'],
                     'destinatario_celular' => $recipient['celular'],
+                    'destinatario_correo' => $recipient['correo'],
                     'ubigeo_destino' => $context->destinationUbigeo,
                     'tipo_via' => $address['tipo_via'],
                     'nombre_via' => $address['nombre_via'],
@@ -194,6 +199,8 @@ final readonly class MySqlPackageRegistrationRepository implements PackageRegist
                     'manzana' => $address['manzana'],
                     'lote_predio' => $address['lote'],
                     'referencia' => $address['referencia'],
+                    'destino_lat' => $address['lat'],
+                    'destino_lng' => $address['lng'],
                     'costo_estimado' => $quote->amount,
                     'id_tarifa' => $quote->tariffId,
                     'estado_actual_id' => $stateId,

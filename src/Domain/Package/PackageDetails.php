@@ -8,7 +8,11 @@ use InvalidArgumentException;
 
 final readonly class PackageDetails
 {
-    /** @param array<string, string> $sender @param array<string, string> $recipient @param array<string, string|null> $address */
+    /** Límites aproximados de Lima Metropolitana y Callao, con margen. */
+    private const LIMA_LAT = [-12.60, -11.50];
+    private const LIMA_LNG = [-77.30, -76.55];
+
+    /** @param array<string, string|null> $sender @param array<string, string|null> $recipient @param array<string, string|null> $address */
     private function __construct(
         public array $sender,
         public array $recipient,
@@ -53,16 +57,29 @@ final readonly class PackageDetails
             }
             return $value;
         };
+        $email = static function (string $group) use ($text, &$errors): ?string {
+            $value = $text($group, 'correo', 150, false);
+            if ($value === null || isset($errors["{$group}.correo"])) {
+                return null;
+            }
+            if (filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
+                $errors["{$group}.correo"] = 'Debe ser un correo valido';
+                return null;
+            }
+            return strtolower($value);
+        };
         $sender = [
             'tipo_documento' => $text('remitente', 'tipo_documento', 3),
             'numero_documento' => $text('remitente', 'numero_documento', 11),
             'nombres' => $text('remitente', 'nombres', 150),
             'celular' => $text('remitente', 'celular', 20),
+            'correo' => $email('remitente'),
         ];
         $recipient = [
             'nombres' => $text('destinatario', 'nombres', 150),
             'dni' => $text('destinatario', 'dni', 8),
             'celular' => $text('destinatario', 'celular', 20),
+            'correo' => $email('destinatario'),
         ];
         $address = [
             'ubigeo_distrito' => $text('direccion', 'ubigeo_distrito', 6),
@@ -72,7 +89,26 @@ final readonly class PackageDetails
             'manzana' => $text('direccion', 'manzana', 10, false),
             'lote' => $text('direccion', 'lote', 10, false),
             'referencia' => $text('direccion', 'referencia', 255, false),
+            'lat' => null,
+            'lng' => null,
         ];
+        $hasLat = ($groups['direccion']['lat'] ?? null) !== null;
+        $hasLng = ($groups['direccion']['lng'] ?? null) !== null;
+        if ($hasLat !== $hasLng) {
+            $errors['direccion.' . ($hasLat ? 'lng' : 'lat')] = 'Envie latitud y longitud juntas';
+        } elseif ($hasLat) {
+            foreach (['lat' => self::LIMA_LAT, 'lng' => self::LIMA_LNG] as $key => [$min, $max]) {
+                $value = $groups['direccion'][$key];
+                if ((!is_int($value) && !is_float($value)) || !is_finite((float) $value)) {
+                    $errors["direccion.{$key}"] = 'Debe ser un numero';
+                } elseif ($value < $min || $value > $max) {
+                    $errors["direccion.{$key}"] = 'El punto debe estar dentro de Lima Metropolitana o Callao';
+                } else {
+                    // DECIMAL(9,6): unos 10 cm, más precisión de la que da un mapa.
+                    $address[$key] = number_format(round((float) $value, 6), 6, '.', '');
+                }
+            }
+        }
         foreach (['remitente' => $sender, 'destinatario' => $recipient, 'direccion' => $address] as $group => $fields) {
             foreach (array_diff(array_keys($groups[$group]), array_keys($fields)) as $field) {
                 $errors["{$group}.{$field}"] = 'Campo no permitido';

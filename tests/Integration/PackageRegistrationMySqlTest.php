@@ -154,6 +154,31 @@ final class PackageRegistrationMySqlTest extends TestCase
         self::assertSame('15.50', self::$db->table('paquetes')->where('id', $first->id)->value('costo_estimado'));
     }
 
+    public function test_saves_emails_and_map_point_and_keeps_the_sender_email_when_omitted(): void
+    {
+        $body = PackageFixture::body();
+        $body['remitente']['correo'] = 'Maria@Example.com';
+        $body['destinatario']['correo'] = 'rosa@example.com';
+        $body['direccion']['lat'] = -12.121234;
+        $body['direccion']['lng'] = -77.030987;
+        $operator = PackageFixture::command()->operator;
+        $first = $this->register(command: new RegisterPackageCommand($operator, PackageDetails::fromArray($body)));
+
+        $package = self::$db->table('paquetes')->where('id', $first->id)->first();
+        self::assertSame('rosa@example.com', $package->destinatario_correo);
+        self::assertSame('-12.121234', $package->destino_lat);
+        self::assertSame('-77.030987', $package->destino_lng);
+        self::assertSame('maria@example.com', self::$db->table('clientes')->value('correo'));
+
+        // Una segunda visita sin correo ni mapa no borra el correo del cliente.
+        $second = $this->register('USAR_LOTE', $first->batch['id']);
+        self::assertSame('maria@example.com', self::$db->table('clientes')->value('correo'));
+        $package = self::$db->table('paquetes')->where('id', $second->id)->first();
+        self::assertNull($package->destinatario_correo);
+        self::assertNull($package->destino_lat);
+        self::assertNull($package->destino_lng);
+    }
+
     public function test_opens_a_new_batch_when_the_vehicle_weight_would_be_exceeded(): void
     {
         $first = $this->register();

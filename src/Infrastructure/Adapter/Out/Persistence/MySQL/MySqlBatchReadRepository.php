@@ -11,6 +11,7 @@ use App\Application\Port\In\Batch\DriverCandidate;
 use App\Application\Port\Out\Batch\BatchReadRepository;
 use App\Domain\Batch\BatchStatus;
 use App\Domain\Batch\DriverAvailability;
+use App\Domain\Package\Coordinates;
 use App\Domain\Package\DecimalQuantity;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -85,7 +86,8 @@ final readonly class MySqlBatchReadRepository implements BatchReadRepository
                 . 'd.nombre_mostrado AS distrito, p.peso_kg, '
                 . 'GREATEST(p.largo_cm, p.ancho_cm, p.alto_cm) AS lado_mayor, p.fecha_ingreso, '
                 . 'p.destinatario_nombres, p.destinatario_dni, p.destinatario_celular, '
-                . 'p.tipo_via, p.nombre_via, p.numero, p.manzana, p.lote_predio, p.referencia',
+                . 'p.tipo_via, p.nombre_via, p.numero, p.manzana, p.lote_predio, p.referencia, '
+                . 'p.destino_lat, p.destino_lng',
             )
             ->get();
 
@@ -114,6 +116,7 @@ final readonly class MySqlBatchReadRepository implements BatchReadRepository
                     'lote' => $row->lote_predio === null ? null : (string) $row->lote_predio,
                     'referencia' => $row->referencia === null ? null : (string) $row->referencia,
                 ],
+                Coordinates::toArray($row->destino_lat, $row->destino_lng),
             );
         }
 

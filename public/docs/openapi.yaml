@@ -865,6 +865,9 @@ paths:
                         type: string
                       celular:
                         type: string
+                      correo:
+                        type: string
+                        nullable: true
                   direccion:
                     type: object
                     properties:
@@ -872,6 +875,8 @@ paths:
                         type: string
                       distrito:
                         type: string
+                      coordenadas:
+                        $ref: '#/components/schemas/MapPoint'
                       tipo_via:
                         type: string
                       nombre_via:
@@ -928,6 +933,9 @@ paths:
                         type: string
                       celular:
                         type: string
+                      correo:
+                        type: string
+                        nullable: true
                   lote:
                     type: object
                     nullable: true
@@ -1785,6 +1793,8 @@ components:
               type: string
               description: Celular peruano de 9 digitos; admite prefijo +51 y espacios
               example: '+51 987654321'
+            correo:
+              $ref: '#/components/schemas/OptionalEmail'
         destinatario:
           type: object
           additionalProperties: false
@@ -1801,6 +1811,8 @@ components:
             celular:
               type: string
               example: '912345678'
+            correo:
+              $ref: '#/components/schemas/OptionalEmail'
         direccion:
           type: object
           additionalProperties: false
@@ -1835,6 +1847,22 @@ components:
               type: string
               nullable: true
               maxLength: 255
+            lat:
+              type: number
+              nullable: true
+              minimum: -12.6
+              maximum: -11.5
+              description: >-
+                Punto elegido en el mapa. Opcional, pero se envia junto con `lng`. Debe estar en
+                Lima Metropolitana o Callao; se guarda con 6 decimales. Sin punto, la ruta usa el
+                centroide del distrito.
+              example: -12.121234
+            lng:
+              type: number
+              nullable: true
+              minimum: -77.3
+              maximum: -76.55
+              example: -77.030987
         peso_kg:
           description: Entre 0.1 y 50 kg; hasta 2 decimales efectivos, sin redondeo silencioso
           oneOf:
@@ -1851,6 +1879,26 @@ components:
           $ref: '#/components/schemas/PackageDimension'
         alto_cm:
           $ref: '#/components/schemas/PackageDimension'
+
+    OptionalEmail:
+      type: string
+      nullable: true
+      format: email
+      maxLength: 150
+      description: Opcional; se guarda en minusculas. Vacio equivale a no enviarlo.
+      example: maria@example.com
+
+    MapPoint:
+      type: object
+      nullable: true
+      description: Punto exacto elegido en el mapa; null si solo se registro el distrito.
+      properties:
+        lat:
+          type: number
+          example: -12.121234
+        lng:
+          type: number
+          example: -77.030987
 
     PackageDimension:
       description: Entre 10 y 150 cm; hasta 1 decimal efectivo, sin redondeo silencioso
@@ -2465,6 +2513,8 @@ components:
                       referencia:
                         type: string
                         nullable: true
+                  coordenadas:
+                    $ref: '#/components/schemas/MapPoint'
 
     DispatchBatchRequest:
       type: object
