@@ -20,6 +20,7 @@ use App\Application\Port\Out\Batch\DispatchSnapshot;
 use App\Application\Port\Out\Route\RouteStop;
 use App\Domain\Batch\BatchStatus;
 use App\Domain\Batch\DriverAvailability;
+use App\Domain\Package\Coordinates;
 use App\Domain\Package\DecimalQuantity;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -50,14 +51,15 @@ final readonly class MySqlBatchDispatchRepository implements BatchDispatchReposi
             ->where('id_lote', $batchId)
             ->orderBy('fecha_ingreso')
             ->orderBy('id')
-            ->get(['id', 'ubigeo_destino']);
+            ->get(['id', 'ubigeo_destino', 'destino_lat', 'destino_lng']);
         if ($rows->isEmpty()) {
             throw new BatchHasNoPackages('El lote no tiene paquetes');
         }
 
         $stops = [];
         foreach ($rows as $row) {
-            $stops[] = new RouteStop((int) $row->id, (string) $row->ubigeo_destino);
+            $point = Coordinates::toArray($row->destino_lat, $row->destino_lng);
+            $stops[] = new RouteStop((int) $row->id, (string) $row->ubigeo_destino, $point['lat'] ?? null, $point['lng'] ?? null);
         }
 
         return new DispatchSnapshot(

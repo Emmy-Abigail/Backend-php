@@ -28,13 +28,13 @@ final class MySqlPackageQueryRepositoryTest extends TestCase
             'CREATE TABLE estados_paquete (id INTEGER PRIMARY KEY, codigo TEXT, nombre TEXT)',
             'CREATE TABLE distritos (ubigeo TEXT PRIMARY KEY, nombre_mostrado TEXT)',
             'CREATE TABLE sedes (id INTEGER PRIMARY KEY, nombre TEXT)',
-            'CREATE TABLE clientes (id INTEGER PRIMARY KEY, tipo_documento TEXT, numero_documento TEXT, nombres_razon_social TEXT, celular TEXT)',
+            'CREATE TABLE clientes (id INTEGER PRIMARY KEY, tipo_documento TEXT, numero_documento TEXT, nombres_razon_social TEXT, celular TEXT, correo TEXT)',
             'CREATE TABLE tipos_vehiculo (id INTEGER PRIMARY KEY, codigo TEXT, nombre TEXT)',
             'CREATE TABLE lotes (id INTEGER PRIMARY KEY, codigo TEXT, estado TEXT, id_conductor INTEGER, id_tipo_vehiculo INTEGER)',
             'CREATE TABLE usuarios (id INTEGER PRIMARY KEY, nombres TEXT, rol TEXT, placa TEXT)',
             'CREATE TABLE motivos_fallo (id INTEGER PRIMARY KEY, codigo TEXT, nombre TEXT)',
             'CREATE TABLE historial_estados (id INTEGER PRIMARY KEY, id_paquete INTEGER, estado_anterior_id INTEGER, estado_nuevo_id INTEGER, id_usuario_ejecutor INTEGER, id_motivo_fallo INTEGER, comentario TEXT, evidencia_key TEXT, created_at TEXT)',
-            'CREATE TABLE paquetes (id INTEGER PRIMARY KEY, tracking_id TEXT, id_sede INTEGER, id_remitente INTEGER, destinatario_nombres TEXT, destinatario_dni TEXT, destinatario_celular TEXT, ubigeo_destino TEXT, tipo_via TEXT, nombre_via TEXT, numero TEXT, manzana TEXT, lote_predio TEXT, referencia TEXT, peso_kg NUMERIC, largo_cm NUMERIC, ancho_cm NUMERIC, alto_cm NUMERIC, costo_estimado NUMERIC, estado_actual_id INTEGER, id_lote INTEGER, orden_parada INTEGER, fecha_ingreso TEXT)',
+            'CREATE TABLE paquetes (id INTEGER PRIMARY KEY, tracking_id TEXT, id_sede INTEGER, id_remitente INTEGER, destinatario_nombres TEXT, destinatario_dni TEXT, destinatario_celular TEXT, destinatario_correo TEXT, ubigeo_destino TEXT, tipo_via TEXT, nombre_via TEXT, numero TEXT, manzana TEXT, lote_predio TEXT, referencia TEXT, destino_lat NUMERIC, destino_lng NUMERIC, peso_kg NUMERIC, largo_cm NUMERIC, ancho_cm NUMERIC, alto_cm NUMERIC, costo_estimado NUMERIC, estado_actual_id INTEGER, id_lote INTEGER, orden_parada INTEGER, fecha_ingreso TEXT)',
         ] as $sql) {
             $this->db->unprepared($sql);
         }
@@ -110,6 +110,23 @@ final class MySqlPackageQueryRepositoryTest extends TestCase
         self::assertSame(['id' => 1, 'codigo' => 'MOTORIZADO', 'nombre' => 'Motorizado'], $detail->data['vehiculo']);
         self::assertSame('2026-10-24T00:00:00-05:00', $detail->data['fecha_ingreso']);
         self::assertSame(10, $detail->data['lote']['id']);
+    }
+
+    public function test_detalle_incluye_correos_y_punto_del_mapa(): void
+    {
+        $data = $this->repository->findDetail(2)->data;
+        self::assertNull($data['direccion']['coordenadas']);
+        self::assertNull($data['destinatario']['correo']);
+        self::assertNull($data['remitente']['correo']);
+
+        $this->db->table('clientes')->where('id', 1)->update(['correo' => 'remitente@example.com']);
+        $this->db->table('paquetes')->where('id', 2)->update([
+            'destinatario_correo' => 'rosa@example.com', 'destino_lat' => '-12.121234', 'destino_lng' => '-77.030987',
+        ]);
+        $data = $this->repository->findDetail(2)->data;
+        self::assertSame(['lat' => -12.121234, 'lng' => -77.030987], $data['direccion']['coordenadas']);
+        self::assertSame('rosa@example.com', $data['destinatario']['correo']);
+        self::assertSame('remitente@example.com', $data['remitente']['correo']);
     }
 
     public function test_un_lote_en_preparacion_muestra_vehiculo_sin_conductor(): void

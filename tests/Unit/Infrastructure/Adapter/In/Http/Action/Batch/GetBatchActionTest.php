@@ -90,6 +90,7 @@ final class GetBatchActionTest extends TestCase
 
         self::assertSame([1, 2], array_column($data['paradas'], 'orden'));
         self::assertArrayHasKey('destinatario', $data['paradas'][0]);
+        self::assertArrayHasKey('coordenadas', $data['paradas'][0]);
         self::assertArrayNotHasKey('paquetes', $data);
     }
 

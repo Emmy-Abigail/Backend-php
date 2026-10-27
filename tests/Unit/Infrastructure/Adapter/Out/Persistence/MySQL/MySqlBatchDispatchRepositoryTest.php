@@ -41,6 +41,8 @@ final class MySqlBatchDispatchRepositoryTest extends TestCase
             "ALTER TABLE paquetes ADD COLUMN ubigeo_destino TEXT DEFAULT '150122'",
             "ALTER TABLE paquetes ADD COLUMN tracking_id TEXT DEFAULT 'TEST000001'",
             "ALTER TABLE paquetes ADD COLUMN fecha_ingreso TEXT DEFAULT '2026-10-24 10:00:00'",
+            'ALTER TABLE paquetes ADD COLUMN destino_lat NUMERIC',
+            'ALTER TABLE paquetes ADD COLUMN destino_lng NUMERIC',
             'CREATE TABLE tipos_vehiculo (id INTEGER PRIMARY KEY, peso_max_total_kg NUMERIC)',
             'CREATE TABLE distritos (ubigeo TEXT PRIMARY KEY, nombre_mostrado TEXT)',
         ] as $sql) {
@@ -117,6 +119,20 @@ final class MySqlBatchDispatchRepositoryTest extends TestCase
         self::assertSame(1, $batch->version);
         self::assertSame([2, 2], $this->db->table('paquetes')->where('id_lote', 210)->pluck('estado_actual_id')->all());
         self::assertSame(2, $this->db->table('historial_estados')->count());
+    }
+
+    public function test_la_ruta_usa_el_punto_del_mapa_y_el_distrito_cuando_no_lo_hay(): void
+    {
+        $this->db->table('paquetes')->where('id', 2)->update(['destino_lat' => '-12.121234', 'destino_lng' => '-77.030987']);
+
+        $stops = $this->repository->snapshot(210, 1)->stops;
+
+        $byId = [];
+        foreach ($stops as $stop) {
+            $byId[$stop->packageId] = [$stop->ubigeo, $stop->lat, $stop->lng];
+        }
+        self::assertSame(['150122', null, null], $byId[1]);
+        self::assertSame(['150122', -12.121234, -77.030987], $byId[2]);
     }
 
     public function test_usa_la_capacidad_vigente_aunque_haya_cambiado_despues_de_pedir_la_ruta(): void

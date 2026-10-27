@@ -8,6 +8,7 @@ use App\Application\Port\In\Batch\LimaTime;
 use App\Application\Port\In\Package\ListPackagesResult;
 use App\Application\Port\Out\Persistence\PackageDetail;
 use App\Application\Port\Out\Persistence\PackageQueryRepository;
+use App\Domain\Package\Coordinates;
 use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Database\Connection;
@@ -123,6 +124,7 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
                 'p.destinatario_nombres',
                 'p.destinatario_dni',
                 'p.destinatario_celular',
+                'p.destinatario_correo',
                 'p.ubigeo_destino',
                 'd.nombre_mostrado as distrito',
                 'p.tipo_via',
@@ -131,6 +133,8 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
                 'p.manzana',
                 'p.lote_predio',
                 'p.referencia',
+                'p.destino_lat',
+                'p.destino_lng',
                 'p.peso_kg',
                 'p.largo_cm',
                 'p.ancho_cm',
@@ -140,6 +144,7 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
                 'c.numero_documento as remitente_numero_documento',
                 'c.nombres_razon_social as remitente_nombres',
                 'c.celular as remitente_celular',
+                'c.correo as remitente_correo',
                 'p.id_lote',
                 'l.codigo as lote_codigo',
                 'l.estado as lote_estado',
@@ -166,6 +171,7 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
                 'nombres' => $row->destinatario_nombres,
                 'dni' => $row->destinatario_dni,
                 'celular' => $row->destinatario_celular,
+                'correo' => $row->destinatario_correo,
             ],
             'direccion' => [
                 'ubigeo' => $row->ubigeo_destino,
@@ -176,6 +182,7 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
                 'manzana' => $row->manzana,
                 'lote' => $row->lote_predio,
                 'referencia' => $row->referencia,
+                'coordenadas' => Coordinates::toArray($row->destino_lat, $row->destino_lng),
             ],
             'medidas' => [
                 'peso_kg' => (float) $row->peso_kg,
@@ -194,6 +201,7 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
                 'numero_documento' => $row->remitente_numero_documento,
                 'nombres' => $row->remitente_nombres,
                 'celular' => $row->remitente_celular,
+                'correo' => $row->remitente_correo,
             ],
             'lote' => $row->id_lote === null ? null : [
                 'id' => (int) $row->id_lote,

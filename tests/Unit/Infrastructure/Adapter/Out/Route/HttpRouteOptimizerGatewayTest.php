@@ -52,6 +52,31 @@ final class HttpRouteOptimizerGatewayTest extends TestCase
     }
 
     #[Test]
+    public function envia_el_punto_del_mapa_solo_en_las_paradas_que_lo_tienen(): void
+    {
+        $transport = $this->createMock(HttpTransport::class);
+        $transport->expects($this->once())
+            ->method('post')
+            ->with(
+                $this->anything(),
+                [
+                    'id_sede' => 3,
+                    'paradas' => [
+                        ['id_paquete' => 5021, 'ubigeo_destino' => '150122', 'lat' => -12.121234, 'lng' => -77.030987],
+                        ['id_paquete' => 5022, 'ubigeo_destino' => '150104'],
+                    ],
+                ],
+                $this->anything(),
+                $this->anything(),
+            )
+            ->willReturn(new HttpResponse(200, '{"orden":[5022,5021]}'));
+
+        $stops = [new RouteStop(5021, '150122', -12.121234, -77.030987), new RouteStop(5022, '150104')];
+
+        self::assertSame([5022, 5021], $this->gateway($transport)->order(3, $stops));
+    }
+
+    #[Test]
     public function tolera_campos_adicionales_en_la_respuesta(): void
     {
         $transport = $this->createStub(HttpTransport::class);
