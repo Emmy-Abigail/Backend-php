@@ -16,6 +16,9 @@ use App\Application\Port\In\Package\RegisterPackageResult;
 use App\Application\Port\Out\Assignment\AssignmentSnapshot;
 use App\Application\Port\Out\Assignment\BatchAssignment;
 use App\Application\Port\Out\Assignment\BatchAssignmentGateway;
+use App\Application\Exception\EmailDeliveryFailed;
+use App\Application\Port\Out\Notification\TrackingCodeMailer;
+use App\Domain\Package\PackageDetails;
 use App\Application\Port\Out\Persistence\PackageRegistrationRepository;
 use App\Application\Port\Out\Pricing\PackagePricing;
 use App\Application\Port\Out\Pricing\TariffRepository;
@@ -132,6 +135,93 @@ final class RegisterPackageServiceTest extends TestCase
         $assignment->method('evaluate')->willReturn(new BatchAssignment('CREAR_LOTE', 2, null));
         $this->expectException(AssignmentUnavailable::class);
         (new RegisterPackageService($repository, new FixedPackagePricing(), $assignment, $this->createStub(TrackingGenerator::class)))->execute(PackageFixture::command());
+    }
+
+    /** Registro que siempre se guarda, para probar solo el envío del código. */
+    private function registeringService(?TrackingCodeMailer $mailer): RegisterPackageService
+    {
+        $repository = $this->createStub(PackageRegistrationRepository::class);
+        $snapshot = PackageFixture::snapshot();
+        $repository->method('contextFor')->willReturn($snapshot->context);
+        $repository->method('snapshot')->willReturn($snapshot);
+        $repository->method('register')->willReturnCallback(
+            static fn ($command, $snapshot, $decision, $quote, $tracking): RegisterPackageResult => new RegisterPackageResult(10, $tracking, '2026-10-21T12:00:00+00:00', $quote, ['id' => 20]),
+        );
+        $assignment = $this->createStub(BatchAssignmentGateway::class);
+        $assignment->method('evaluate')->willReturn(new BatchAssignment('CREAR_LOTE', 1, null));
+        $tracking = $this->createStub(TrackingGenerator::class);
+        $tracking->method('generate')->willReturn('AB23456789');
+
+        return new RegisterPackageService($repository, new FixedPackagePricing(), $assignment, $tracking, $mailer);
+    }
+
+    private function commandWithEmails(?string $sender, ?string $recipient): RegisterPackageCommand
+    {
+        $body = PackageFixture::body();
+        if ($sender !== null) {
+            $body['remitente']['correo'] = $sender;
+        }
+        if ($recipient !== null) {
+            $body['destinatario']['correo'] = $recipient;
+        }
+
+        return new RegisterPackageCommand(PackageFixture::command()->operator, PackageDetails::fromArray($body));
+    }
+
+    public function test_sends_the_tracking_code_to_sender_and_recipient_after_saving(): void
+    {
+        $calls = [];
+        $mailer = $this->createMock(TrackingCodeMailer::class);
+        $mailer->expects($this->exactly(2))->method('sendTrackingCode')->willReturnCallback(
+            static function (string $name, string $email, string $tracking, bool $isSender) use (&$calls): void {
+                $calls[] = [$name, $email, $tracking, $isSender];
+            },
+        );
+
+        $result = $this->registeringService($mailer)->execute($this->commandWithEmails('juan@example.com', 'rosa@example.com'));
+
+        self::assertSame([
+            ['Remitente de prueba', 'juan@example.com', 'AB23456789', true],
+            ['Destinatario de prueba', 'rosa@example.com', 'AB23456789', false],
+        ], $calls);
+        self::assertSame(['remitente' => true, 'destinatario' => true], $result->toArray()['correo_enviado']);
+    }
+
+    public function test_only_writes_to_whoever_has_an_email(): void
+    {
+        $mailer = $this->createMock(TrackingCodeMailer::class);
+        $mailer->expects($this->once())->method('sendTrackingCode')->with('Destinatario de prueba', 'rosa@example.com', 'AB23456789', false);
+
+        $result = $this->registeringService($mailer)->execute($this->commandWithEmails(null, 'rosa@example.com'));
+
+        self::assertSame(['remitente' => null, 'destinatario' => true], $result->toArray()['correo_enviado']);
+    }
+
+    public function test_a_failed_email_does_not_undo_the_registration(): void
+    {
+        $mailer = $this->createStub(TrackingCodeMailer::class);
+        $mailer->method('sendTrackingCode')->willReturnCallback(static function (string $name, string $email): void {
+            if ($email === 'juan@example.com') {
+                throw new EmailDeliveryFailed('SMTP caido');
+            }
+        });
+
+        $logged = ini_set('error_log', PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null');
+        try {
+            $data = $this->registeringService($mailer)->execute($this->commandWithEmails('juan@example.com', 'rosa@example.com'))->toArray();
+        } finally {
+            ini_set('error_log', (string) $logged);
+        }
+
+        self::assertSame('AB23456789', $data['tracking_id']);
+        self::assertSame(['remitente' => false, 'destinatario' => true], $data['correo_enviado']);
+    }
+
+    public function test_without_a_mailer_nothing_is_sent(): void
+    {
+        $data = $this->registeringService(null)->execute($this->commandWithEmails('juan@example.com', 'rosa@example.com'))->toArray();
+
+        self::assertSame(['remitente' => null, 'destinatario' => null], $data['correo_enviado']);
     }
 
     public function test_authorization_is_enforced_also_at_the_use_case_boundary(): void

@@ -626,6 +626,77 @@ paths:
                 message: No hay una tarifa base vigente
                 error: tarifa_no_configurada
 
+  /api/v1/geocode/suggest:
+    get:
+      tags: [Direcciones]
+      summary: Sugerir direcciones mientras el operador escribe
+      description: |
+        Requiere rol OPERADOR. PHP consulta al proveedor de mapas (Photon, OpenStreetMap) y devuelve
+        hasta 5 direcciones de distritos con cobertura, listas para llenar el formulario de registro.
+        Si el operador escribio un numero de casa y el mapa no lo conoce, se conserva el numero escrito.
+        El front debe esperar unos 300 ms despues de la ultima tecla antes de llamar.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, minLength: 3, maxLength: 100 }
+          example: av caminos del inca 1250
+      responses:
+        '200':
+          description: Sugerencias (puede ser una lista vacia)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AddressSuggestion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          description: Busqueda de menos de 3 o mas de 100 caracteres (`busqueda_invalida`)
+        '503':
+          description: El proveedor de mapas no responde (`direcciones_no_disponible`); el operador completa a mano
+
+  /api/v1/geocode/reverse:
+    get:
+      tags: [Direcciones]
+      summary: Direccion del punto marcado en el mapa
+      description: |
+        Requiere rol OPERADOR. Devuelve los campos del formulario para el punto marcado.
+        `lat` y `lng` de la respuesta son los mismos que se enviaron (el punto exacto del operador).
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: lat, in: query, required: true, schema: { type: string }, example: '-12.1391' }
+        - { name: lng, in: query, required: true, schema: { type: string }, example: '-76.9937' }
+      responses:
+        '200':
+          description: Direccion encontrada
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AddressSuggestion'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No hay una direccion en un distrito con cobertura (`direccion_no_encontrada`)
+        '422':
+          description: Punto no numerico o fuera de Lima Metropolitana y Callao (`punto_invalido`)
+        '503':
+          description: El proveedor de mapas no responde (`direcciones_no_disponible`)
+
   /api/v1/packages:
     get:
       tags: [Paquetes (prÃ³ximamente)]
@@ -1953,6 +2024,36 @@ components:
               type: string
             zona:
               type: string
+        correo_enviado:
+          type: object
+          description: >
+            Envio del codigo de seguimiento por correo, despues de guardar el paquete.
+            true = enviado, false = fallo el envio (el registro igual queda guardado),
+            null = esa persona no tiene correo.
+          properties:
+            remitente:
+              type: boolean
+              nullable: true
+            destinatario:
+              type: boolean
+              nullable: true
+          example: { remitente: true, destinatario: null }
+
+    AddressSuggestion:
+      type: object
+      properties:
+        etiqueta: { type: string, example: 'Avenida Caminos del Inca 1250, Santiago de Surco' }
+        tipo_via:
+          type: string
+          nullable: true
+          enum: [Av., Jr., Calle, Psje., Carretera]
+          description: null si la calle no empieza con un tipo de via conocido
+        nombre_via: { type: string, nullable: true, example: Caminos del Inca }
+        numero: { type: string, nullable: true, example: '1250' }
+        ubigeo_distrito: { type: string, example: '150140' }
+        distrito: { type: string, example: Santiago de Surco }
+        lat: { type: number, example: -12.133404 }
+        lng: { type: number, example: -76.98329 }
 
     LoginRequest:
       type: object

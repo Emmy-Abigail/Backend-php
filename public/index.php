@@ -18,6 +18,7 @@ use App\Application\Service\Catalog\GetGeographyService;
 use App\Application\Service\Catalog\GetSedesService;
 use App\Application\Service\Catalog\GetVehicleTypesService;
 use App\Application\Service\Pricing\QuoteShipmentService;
+use App\Application\Service\Geocoding\AddressLookupService;
 use App\Application\Service\Package\GetPackageService;
 use App\Application\Service\Package\ListPackagesService;
 use App\Application\Service\Package\RegisterPackageService;
@@ -41,6 +42,8 @@ use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetFailureReasonsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetGeographyAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetSedesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetVehicleTypesAction;
+use App\Infrastructure\Adapter\In\Http\Action\Geocoding\ReverseGeocodeAction;
+use App\Infrastructure\Adapter\In\Http\Action\Geocoding\SuggestAddressesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Pricing\QuoteAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\GetPackageAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\ListPackagesAction;
@@ -54,6 +57,7 @@ use App\Infrastructure\Adapter\In\Http\Middleware\MustChangePasswordMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
 use App\Infrastructure\Adapter\Out\Notification\SmtpUserCredentialsMailer;
 use App\Infrastructure\Adapter\Out\Assignment\HttpBatchAssignmentGateway;
+use App\Infrastructure\Adapter\Out\Geocoding\PhotonGeocodingGateway;
 use App\Infrastructure\Adapter\Out\Http\StreamHttpTransport;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageQueryRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlBatchDispatchRepository;
@@ -67,6 +71,7 @@ use App\Infrastructure\Adapter\Out\Pricing\LocalPackagePricing;
 use App\Infrastructure\Adapter\Out\Route\HttpRouteOptimizerGateway;
 use App\Infrastructure\Adapter\Out\Security\RandomTrackingGenerator;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlCatalogRepository;
+use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlDistrictDirectory;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPasswordResetTokenRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlTariffRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlUserRepository;
@@ -190,6 +195,25 @@ $operatorRoleMiddleware = new RoleMiddleware('OPERADOR');
 $registerQuoteRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/QuoteRoutes.php';
 $registerQuoteRoutes($app, $quoteAction, $jwtAuthMiddleware, $operatorRoleMiddleware, $mustChangePasswordMiddleware);
 
+// Buscador de direcciones (solo Operador): Angular -> PHP -> proveedor de mapas.
+$addressLookup = new AddressLookupService(
+    new PhotonGeocodingGateway(
+        new StreamHttpTransport(),
+        $_ENV['GEOCODING_URL'] ?? 'https://photon.komoot.io',
+        (float) ($_ENV['GEOCODING_TIMEOUT_SECONDS'] ?? 3),
+    ),
+    new MySqlDistrictDirectory(Capsule::connection()),
+);
+$registerGeocodingRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/GeocodingRoutes.php';
+$registerGeocodingRoutes(
+    $app,
+    new SuggestAddressesAction($addressLookup),
+    new ReverseGeocodeAction($addressLookup),
+    $jwtAuthMiddleware,
+    $operatorRoleMiddleware,
+    $mustChangePasswordMiddleware,
+);
+
 // El registro calcula el precio en PHP antes de solicitar la asignación a Python.
 $registerPackageAction = new RegisterPackageAction(new RegisterPackageService(
     new MySqlPackageRegistrationRepository(Capsule::connection()),
@@ -201,6 +225,7 @@ $registerPackageAction = new RegisterPackageAction(new RegisterPackageService(
         (float) ($_ENV['ASSIGNMENT_TIMEOUT_SECONDS'] ?? 3),
     ),
     new RandomTrackingGenerator(),
+    $mailer,
 ));
 $packageQueryRepository = new MySqlPackageQueryRepository(Capsule::connection());
 $listPackagesAction = new ListPackagesAction(new ListPackagesService($packageQueryRepository));

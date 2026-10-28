@@ -9,8 +9,8 @@ use InvalidArgumentException;
 final readonly class PackageDetails
 {
     /** Límites aproximados de Lima Metropolitana y Callao, con margen. */
-    private const LIMA_LAT = [-12.60, -11.50];
-    private const LIMA_LNG = [-77.30, -76.55];
+    private const LIMA_LAT = Coordinates::LIMA_LAT;
+    private const LIMA_LNG = Coordinates::LIMA_LNG;
 
     /** @param array<string, string|null> $sender @param array<string, string|null> $recipient @param array<string, string|null> $address */
     private function __construct(
