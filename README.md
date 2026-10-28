@@ -95,7 +95,9 @@ nuevo que debe guardar el frontend.
 
 ### Cotizacion (Solo Operador)
 * `POST /api/v1/quotes` - Cotiza un envio sin guardarlo. El origen es la sede del operador autenticado; el precio es el mayor entre el peso real y el volumetrico (largo x ancho x alto / 5000) por la tarifa base vigente y el factor de zona (misma zona 1.0, Centro con otra 1.2, entre perifericas 1.5). La tarifa vigente inicial es S/ 2.50 por kg (migracion `SetIllustrativeBaseTariff`).
-* En `POST /api/v1/packages`, `remitente.correo`, `destinatario.correo` y `direccion.lat`/`direccion.lng` son opcionales. Las coordenadas van juntas, dentro de Lima y Callao, y se usan para ordenar la ruta.
+* En `POST /api/v1/packages`, `remitente.correo`, `destinatario.correo` y `direccion.lat`/`direccion.lng` son opcionales. Las coordenadas van juntas, dentro de Lima y Callao, y se usan para ordenar la ruta. Si el remitente o el destinatario tienen correo, reciben su codigo de seguimiento (`correo_enviado` en la respuesta).
+* `GET /api/v1/geocode/suggest?q=` - Sugerencias de direccion mientras se escribe (minimo 3 caracteres, hasta 5 resultados en distritos con cobertura).
+* `GET /api/v1/geocode/reverse?lat=&lng=` - Direccion del punto marcado en el mapa, con los campos del formulario.
 
 ### Lotes (Operador y Conductor)
 El lote se crea solo al registrar un paquete (queda `EN_PREPARACION`) y el Operador lo despacha a un conductor.

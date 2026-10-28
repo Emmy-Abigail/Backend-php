@@ -11,14 +11,24 @@ use DateTimeZone;
 
 final readonly class RegisterPackageResult
 {
-    /** @param array<string, mixed> $batch */
+    /**
+     * @param array<string, mixed> $batch
+     * @param array{remitente: ?bool, destinatario: ?bool} $emailsSent null = sin correo registrado
+     */
     public function __construct(
         public int $id,
         public string $tracking,
         public string $registeredAt,
         public PackageQuote $quote,
         public array $batch,
+        public array $emailsSent = ['remitente' => null, 'destinatario' => null],
     ) {
+    }
+
+    /** @param array{remitente: ?bool, destinatario: ?bool} $emailsSent */
+    public function withEmailsSent(array $emailsSent): self
+    {
+        return new self($this->id, $this->tracking, $this->registeredAt, $this->quote, $this->batch, $emailsSent);
     }
 
     /** @return array<string, mixed> */
@@ -31,6 +41,7 @@ final readonly class RegisterPackageResult
             'fecha_ingreso' => LimaTime::format(new DateTimeImmutable($this->registeredAt, new DateTimeZone('UTC'))),
             'cotizacion' => ['id_tarifa' => $this->quote->tariffId, 'monto' => (float) $this->quote->amount],
             'lote' => $this->batch,
+            'correo_enviado' => $this->emailsSent,
         ];
     }
 }

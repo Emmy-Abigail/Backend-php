@@ -6,11 +6,12 @@ namespace App\Infrastructure\Adapter\Out\Notification;
 
 use App\Application\Exception\EmailDeliveryFailed;
 use App\Application\Port\Out\Notification\PasswordResetMailer;
+use App\Application\Port\Out\Notification\TrackingCodeMailer;
 use App\Application\Port\Out\Notification\UserCredentialsMailer;
 use PHPMailer\PHPMailer\Exception;
 use PHPMailer\PHPMailer\PHPMailer;
 
-final readonly class SmtpUserCredentialsMailer implements UserCredentialsMailer, PasswordResetMailer
+final readonly class SmtpUserCredentialsMailer implements UserCredentialsMailer, PasswordResetMailer, TrackingCodeMailer
 {
     public function __construct(
         private string $host,
@@ -79,6 +80,35 @@ final readonly class SmtpUserCredentialsMailer implements UserCredentialsMailer,
             $mailer->send();
         } catch (Exception $exception) {
             throw new EmailDeliveryFailed('No fue posible enviar el correo de recuperación', 0, $exception);
+        }
+    }
+
+    public function sendTrackingCode(string $recipientName, string $recipientEmail, string $tracking, bool $isSender): void
+    {
+        $intro = $isSender
+            ? 'Registramos tu envío en RIVA.'
+            : 'Tienes un paquete en camino con RIVA.';
+
+        try {
+            $mailer = $this->createMailer();
+            $mailer->addAddress($recipientEmail, $recipientName);
+            $mailer->isHTML(true);
+            $mailer->Subject = 'Tu código de seguimiento RIVA: ' . $tracking;
+            $mailer->Body = sprintf(
+                '<p>Hola, %s:</p><p>%s</p><p>Este es tu código de seguimiento:</p><p><strong>%s</strong></p><p>Guárdalo para consultar el estado de tu paquete.</p>',
+                htmlspecialchars($recipientName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+                $intro,
+                htmlspecialchars($tracking, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'),
+            );
+            $mailer->AltBody = sprintf(
+                "Hola, %s:\n\n%s\n\nEste es tu código de seguimiento: %s\n\nGuárdalo para consultar el estado de tu paquete.",
+                $recipientName,
+                $intro,
+                $tracking,
+            );
+            $mailer->send();
+        } catch (Exception $exception) {
+            throw new EmailDeliveryFailed('No fue posible enviar el código de seguimiento', 0, $exception);
         }
     }
 

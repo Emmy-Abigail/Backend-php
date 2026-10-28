@@ -38,4 +38,33 @@ final readonly class StreamHttpTransport implements HttpTransport
 
         return new HttpResponse((int) $status[1], $body);
     }
+
+    public function get(string $url, float $timeout): HttpResponse
+    {
+        $context = stream_context_create(['http' => [
+            'method' => 'GET',
+            // Los servicios públicos de OpenStreetMap piden identificar la aplicación.
+            'header' => "Accept: application/json\r\nUser-Agent: RIVA-Envios/1.0\r\n",
+            'timeout' => $timeout,
+            'ignore_errors' => true,
+            'follow_location' => 0,
+            'max_redirects' => 0,
+        ]]);
+
+        set_error_handler(static function (): never {
+            throw new RuntimeException('No se pudo contactar al servicio externo');
+        });
+        try {
+            $body = file_get_contents($url, false, $context, 0, 262145);
+        } finally {
+            restore_error_handler();
+        }
+
+        if ($body === false || strlen($body) > 262144
+            || !preg_match('/^HTTP\/\S+\s+([0-9]{3})\b/', $http_response_header[0] ?? '', $status)) {
+            throw new RuntimeException('Respuesta HTTP invalida');
+        }
+
+        return new HttpResponse((int) $status[1], $body);
+    }
 }
