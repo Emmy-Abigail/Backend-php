@@ -260,6 +260,54 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
         return $history;
     }
 
+    public function findPublicTracking(string $trackingId): ?array
+    {
+        // Solo se seleccionan columnas públicas: ningún dato personal sale de la BD.
+        $row = $this->connection->table('paquetes as p')
+            ->join('estados_paquete as e', 'e.id', '=', 'p.estado_actual_id')
+            ->join('distritos as d', 'd.ubigeo', '=', 'p.ubigeo_destino')
+            ->where('p.tracking_id', $trackingId)
+            ->first([
+                'p.id',
+                'p.tracking_id',
+                'e.codigo as estado_codigo',
+                'e.nombre as estado_nombre',
+                'd.nombre_mostrado as distrito',
+                'p.fecha_ingreso',
+            ]);
+
+        if ($row === null) {
+            return null;
+        }
+
+        $events = $this->connection->table('historial_estados as h')
+            ->join('estados_paquete as en', 'en.id', '=', 'h.estado_nuevo_id')
+            ->leftJoin('motivos_fallo as m', 'm.id', '=', 'h.id_motivo_fallo')
+            ->where('h.id_paquete', $row->id)
+            ->orderBy('h.created_at')
+            ->orderBy('h.id')
+            ->get(['en.codigo', 'en.nombre', 'm.nombre as motivo', 'h.created_at']);
+
+        $timeline = [];
+        foreach ($events as $event) {
+            $timeline[] = [
+                'estado' => $event->codigo,
+                'nombre' => $event->nombre,
+                'fecha' => $this->formatDate($event->created_at),
+                // Motivo genérico del catálogo; el comentario libre del conductor no se publica.
+                'motivo' => $event->motivo,
+            ];
+        }
+
+        return [
+            'tracking_id' => $row->tracking_id,
+            'estado' => ['codigo' => $row->estado_codigo, 'nombre' => $row->estado_nombre],
+            'destino' => ['distrito' => $row->distrito],
+            'fecha_ingreso' => $this->formatDate($row->fecha_ingreso),
+            'linea_de_tiempo' => $timeline,
+        ];
+    }
+
     /** Los filtros representan dias de Lima, pero la BD guarda UTC. */
     private function dayBoundaryUtc(string $date, bool $nextDay = false): string
     {

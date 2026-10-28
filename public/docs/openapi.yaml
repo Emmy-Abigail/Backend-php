@@ -1629,13 +1629,94 @@ paths:
 
   /api/v1/tracking/{trackingId}:
     get:
-      tags: [Seguimiento (prÃ³ximamente)]
-      summary: '[Pendiente] Consultar seguimiento'
+      tags: [Seguimiento]
+      summary: Consultar el seguimiento publico de un envio
+      operationId: getTracking
+      description: |
+        Publico, sin token. Devuelve solo estado, distrito y linea de tiempo; nunca datos del
+        destinatario, direccion exacta, remitente, costo, conductor ni comentarios.
+        En un fallo muestra el motivo generico del catalogo. Fechas en hora de Lima.
+        Limite de consultas por IP (por defecto 30 por minuto, TRACKING_RATE_LIMIT_PER_MINUTE);
+        tambien cuentan los codigos invalidos o inexistentes.
       parameters:
-        - $ref: '#/components/parameters/TrackingId'
+        - name: trackingId
+          in: path
+          required: true
+          description: 10 caracteres (2-9 y A-Z sin I ni O). Se aceptan minusculas.
+          schema:
+            type: string
+            example: KKPDAYMUAA
       responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
+        '200':
+          description: Seguimiento del envio
+          headers:
+            X-RateLimit-Limit:
+              schema:
+                type: integer
+            X-RateLimit-Remaining:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tracking_id:
+                    type: string
+                  estado:
+                    type: object
+                    properties:
+                      codigo:
+                        type: string
+                        enum: [EN_ALMACEN, ASIGNADO, EN_RUTA, ENTREGADO, FALLIDO]
+                      nombre:
+                        type: string
+                  destino:
+                    type: object
+                    properties:
+                      distrito:
+                        type: string
+                  fecha_ingreso:
+                    type: string
+                    example: '2026-10-23T10:50:35-05:00'
+                  linea_de_tiempo:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        estado:
+                          type: string
+                        nombre:
+                          type: string
+                        fecha:
+                          type: string
+                        motivo:
+                          type: string
+                          nullable: true
+                          example: Cliente ausente
+        '404':
+          description: No existe un envio con ese codigo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '422':
+          description: El codigo no tiene el formato de seguimiento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '429':
+          description: Demasiadas consultas desde la misma IP
+          headers:
+            Retry-After:
+              description: Segundos que faltan para poder consultar de nuevo
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
 
   /api/v1/dashboard/metrics:
     get:
