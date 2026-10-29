@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Infrastructure\Adapter\In\Http\Action\Package\GetPackageAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\ListPackagesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\RegisterPackageAction;
+use App\Infrastructure\Adapter\In\Http\Action\Package\RetryPackageAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\MustChangePasswordMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
@@ -21,6 +22,7 @@ return static function (
     RoleMiddleware $operatorRoleMiddleware,
     MustChangePasswordMiddleware $mustChangePasswordMiddleware,
     RoleMiddleware $operatorOrDriverRoleMiddleware,
+    RetryPackageAction $retryPackageAction,
 ): void {
     $notImplemented = static function (ServerRequestInterface $request, ResponseInterface $response): ResponseInterface {
         $response->getBody()->write(json_encode(['message' => 'Endpoint aún no implementado']));
@@ -38,6 +40,10 @@ return static function (
         ->add($jwtAuthMiddleware);
     $app->get('/api/v1/packages/{id}', $getPackageAction)
         ->add($operatorOrDriverRoleMiddleware)
+        ->add($mustChangePasswordMiddleware)
+        ->add($jwtAuthMiddleware);
+    $app->post('/api/v1/packages/{id}/retry', $retryPackageAction)
+        ->add($operatorRoleMiddleware)
         ->add($mustChangePasswordMiddleware)
         ->add($jwtAuthMiddleware);
     $app->get('/api/v1/packages/{id}/history', $notImplemented);

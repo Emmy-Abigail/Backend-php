@@ -21,6 +21,7 @@ use App\Application\Service\Pricing\QuoteShipmentService;
 use App\Application\Service\Package\GetPackageService;
 use App\Application\Service\Package\ListPackagesService;
 use App\Application\Service\Package\RegisterPackageService;
+use App\Application\Service\Package\RetryPackageService;
 use App\Application\Service\Tracking\GetTrackingService;
 use App\Application\Service\User\ChangeUserStatusService;
 use App\Application\Service\User\CreateUserService;
@@ -46,6 +47,7 @@ use App\Infrastructure\Adapter\In\Http\Action\Pricing\QuoteAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\GetPackageAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\ListPackagesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\RegisterPackageAction;
+use App\Infrastructure\Adapter\In\Http\Action\Package\RetryPackageAction;
 use App\Infrastructure\Adapter\In\Http\Action\Tracking\GetTrackingAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\ChangeUserStatusAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\CreateUserAction;
@@ -66,6 +68,7 @@ use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlFinalStatusRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageEvidenceRepository;
 use App\Infrastructure\Adapter\Out\Storage\LocalEvidenceStorage;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageRegistrationRepository;
+use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageRetrySourceRepository;
 use App\Infrastructure\Adapter\Out\Pricing\LocalPackagePricing;
 use App\Infrastructure\Adapter\Out\Route\HttpRouteOptimizerGateway;
 use App\Infrastructure\Adapter\Out\Security\FileRateLimiter;
@@ -195,7 +198,7 @@ $registerQuoteRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http
 $registerQuoteRoutes($app, $quoteAction, $jwtAuthMiddleware, $operatorRoleMiddleware, $mustChangePasswordMiddleware);
 
 // El registro calcula el precio en PHP antes de solicitar la asignación a Python.
-$registerPackageAction = new RegisterPackageAction(new RegisterPackageService(
+$registerPackageService = new RegisterPackageService(
     new MySqlPackageRegistrationRepository(Capsule::connection()),
     new LocalPackagePricing($tariffRepository),
     new HttpBatchAssignmentGateway(
@@ -205,6 +208,12 @@ $registerPackageAction = new RegisterPackageAction(new RegisterPackageService(
         (float) ($_ENV['ASSIGNMENT_TIMEOUT_SECONDS'] ?? 3),
     ),
     new RandomTrackingGenerator(),
+);
+$registerPackageAction = new RegisterPackageAction($registerPackageService);
+// El reintento de un paquete FALLIDO reutiliza el mismo registro (precio, Python, lote y tracking nuevos).
+$retryPackageAction = new RetryPackageAction(new RetryPackageService(
+    new MySqlPackageRetrySourceRepository(Capsule::connection()),
+    $registerPackageService,
 ));
 $packageQueryRepository = new MySqlPackageQueryRepository(Capsule::connection());
 $listPackagesAction = new ListPackagesAction(new ListPackagesService($packageQueryRepository));
@@ -219,6 +228,7 @@ $registerPackageRoutes(
     new RoleMiddleware('OPERADOR'),
     $mustChangePasswordMiddleware,
     new RoleMiddleware('OPERADOR', 'CONDUCTOR'),
+    $retryPackageAction,
 );
 
 // Lotes: consulta (Operador y Conductor) y despacho (Operador). El orden de las paradas lo calcula Python.
