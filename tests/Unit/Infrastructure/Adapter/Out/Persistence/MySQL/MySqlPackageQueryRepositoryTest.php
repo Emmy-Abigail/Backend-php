@@ -168,6 +168,40 @@ final class MySqlPackageQueryRepositoryTest extends TestCase
         self::assertArrayNotHasKey('evidencia_key', $delivered);
     }
 
+    public function test_tracking_publico_muestra_estado_distrito_y_linea_de_tiempo_sin_datos_personales(): void
+    {
+        $this->db->table('motivos_fallo')->insert(['id' => 1, 'codigo' => 'AUSENTE', 'nombre' => 'Cliente ausente']);
+        $this->db->table('paquetes')->where('id', 2)->update(['estado_actual_id' => 3]);
+        $base = ['id_paquete' => 2, 'id_usuario_ejecutor' => 7, 'id_motivo_fallo' => null, 'comentario' => null, 'evidencia_key' => null];
+        $this->db->table('historial_estados')->insert([
+            $base + ['id' => 1, 'estado_anterior_id' => null, 'estado_nuevo_id' => 1, 'created_at' => '2026-10-24 05:00:00'],
+            $base + ['id' => 2, 'estado_anterior_id' => 1, 'estado_nuevo_id' => 2, 'created_at' => '2026-10-24 06:00:00'],
+            $base + ['id' => 3, 'estado_anterior_id' => 2, 'estado_nuevo_id' => 5, 'created_at' => '2026-10-24 06:30:00'],
+            array_replace($base, ['id' => 4, 'estado_anterior_id' => 5, 'estado_nuevo_id' => 3, 'created_at' => '2026-10-24 07:00:00', 'id_motivo_fallo' => 1, 'comentario' => 'Vecino dijo que viajo']),
+        ]);
+
+        $tracking = $this->repository->findPublicTracking('TEST2');
+
+        self::assertSame(['tracking_id', 'estado', 'destino', 'fecha_ingreso', 'linea_de_tiempo'], array_keys($tracking));
+        self::assertSame('FALLIDO', $tracking['estado']['codigo']);
+        self::assertSame(['distrito' => 'Miraflores'], $tracking['destino']);
+        self::assertSame('2026-10-24T00:00:00-05:00', $tracking['fecha_ingreso']);
+        self::assertSame(['EN_ALMACEN', 'ASIGNADO', 'EN_RUTA', 'FALLIDO'], array_column($tracking['linea_de_tiempo'], 'estado'));
+        self::assertSame('2026-10-24T02:00:00-05:00', $tracking['linea_de_tiempo'][3]['fecha']);
+        self::assertSame('Cliente ausente', $tracking['linea_de_tiempo'][3]['motivo']);
+        self::assertSame(['estado', 'nombre', 'fecha', 'motivo'], array_keys($tracking['linea_de_tiempo'][3]));
+
+        $json = json_encode($tracking);
+        foreach (['Cliente 2', '41234567', '912345678', 'Prueba', 'Remitente', 'Conductor', 'TEST01', 'Vecino dijo'] as $private) {
+            self::assertStringNotContainsString($private, $json);
+        }
+    }
+
+    public function test_tracking_de_un_codigo_inexistente(): void
+    {
+        self::assertNull($this->repository->findPublicTracking('NOEXISTE00'));
+    }
+
     public function test_el_conductor_recibe_vehiculo_sin_remitente_ni_costo(): void
     {
         $service = new GetPackageService($this->repository);

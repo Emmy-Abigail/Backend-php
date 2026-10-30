@@ -19,4 +19,11 @@ interface PackageQueryRepository
     ): ListPackagesResult;
 
     public function findDetail(int $packageId): ?PackageDetail;
+
+    /**
+     * Vista pública del seguimiento: estado, distrito y línea de tiempo, sin datos personales.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function findPublicTracking(string $trackingId): ?array;
 }

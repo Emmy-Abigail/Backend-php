@@ -22,6 +22,8 @@ use App\Application\Service\Geocoding\AddressLookupService;
 use App\Application\Service\Package\GetPackageService;
 use App\Application\Service\Package\ListPackagesService;
 use App\Application\Service\Package\RegisterPackageService;
+use App\Application\Service\Package\RetryPackageService;
+use App\Application\Service\Tracking\GetTrackingService;
 use App\Application\Service\User\ChangeUserStatusService;
 use App\Application\Service\User\CreateUserService;
 use App\Application\Service\User\ListUsersService;
@@ -48,12 +50,15 @@ use App\Infrastructure\Adapter\In\Http\Action\Pricing\QuoteAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\GetPackageAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\ListPackagesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\RegisterPackageAction;
+use App\Infrastructure\Adapter\In\Http\Action\Package\RetryPackageAction;
+use App\Infrastructure\Adapter\In\Http\Action\Tracking\GetTrackingAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\ChangeUserStatusAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\CreateUserAction;
 use App\Infrastructure\Adapter\In\Http\Action\User\ListUsersAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\CorsMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\MustChangePasswordMiddleware;
+use App\Infrastructure\Adapter\In\Http\Middleware\RateLimitMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
 use App\Infrastructure\Adapter\Out\Notification\SmtpUserCredentialsMailer;
 use App\Infrastructure\Adapter\Out\Assignment\HttpBatchAssignmentGateway;
@@ -67,8 +72,10 @@ use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlFinalStatusRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageEvidenceRepository;
 use App\Infrastructure\Adapter\Out\Storage\LocalEvidenceStorage;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageRegistrationRepository;
+use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageRetrySourceRepository;
 use App\Infrastructure\Adapter\Out\Pricing\LocalPackagePricing;
 use App\Infrastructure\Adapter\Out\Route\HttpRouteOptimizerGateway;
+use App\Infrastructure\Adapter\Out\Security\FileRateLimiter;
 use App\Infrastructure\Adapter\Out\Security\RandomTrackingGenerator;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlCatalogRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlDistrictDirectory;
@@ -215,7 +222,7 @@ $registerGeocodingRoutes(
 );
 
 // El registro calcula el precio en PHP antes de solicitar la asignación a Python.
-$registerPackageAction = new RegisterPackageAction(new RegisterPackageService(
+$registerPackageService = new RegisterPackageService(
     new MySqlPackageRegistrationRepository(Capsule::connection()),
     new LocalPackagePricing($tariffRepository),
     new HttpBatchAssignmentGateway(
@@ -226,6 +233,12 @@ $registerPackageAction = new RegisterPackageAction(new RegisterPackageService(
     ),
     new RandomTrackingGenerator(),
     $mailer,
+);
+$registerPackageAction = new RegisterPackageAction($registerPackageService);
+// El reintento de un paquete FALLIDO reutiliza el mismo registro (precio, Python, lote y tracking nuevos).
+$retryPackageAction = new RetryPackageAction(new RetryPackageService(
+    new MySqlPackageRetrySourceRepository(Capsule::connection()),
+    $registerPackageService,
 ));
 $packageQueryRepository = new MySqlPackageQueryRepository(Capsule::connection());
 $listPackagesAction = new ListPackagesAction(new ListPackagesService($packageQueryRepository));
@@ -240,6 +253,7 @@ $registerPackageRoutes(
     new RoleMiddleware('OPERADOR'),
     $mustChangePasswordMiddleware,
     new RoleMiddleware('OPERADOR', 'CONDUCTOR'),
+    $retryPackageAction,
 );
 
 // Lotes: consulta (Operador y Conductor) y despacho (Operador). El orden de las paradas lo calcula Python.
@@ -299,8 +313,21 @@ $registerDeliveryRoutes(
     new RoleMiddleware('OPERADOR', 'ADMINISTRADOR'),
 );
 
+// Seguimiento publico: sin token y con limite de consultas por IP, contado en archivos (sin tabla).
+$registerTrackingRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/TrackingRoutes.php';
+$registerTrackingRoutes(
+    $app,
+    new GetTrackingAction(new GetTrackingService($packageQueryRepository)),
+    new RateLimitMiddleware(
+        new FileRateLimiter(
+            $_ENV['RATE_LIMIT_STORAGE_PATH'] ?? sys_get_temp_dir() . '/riva-rate-limit',
+            (int) ($_ENV['TRACKING_RATE_LIMIT_PER_MINUTE'] ?? 30),
+        ),
+        'tracking',
+    ),
+);
+
 $routeFiles = [
-    __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/TrackingRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/DashboardRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/ZoneRoutes.php',
 ];

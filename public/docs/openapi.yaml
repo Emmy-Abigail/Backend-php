@@ -1088,6 +1088,101 @@ paths:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
 
+  /api/v1/packages/{id}/retry:
+    post:
+      tags: [Paquetes (prÃ³ximamente)]
+      summary: Crear el reintento de un paquete FALLIDO
+      operationId: retryPackage
+      description: |
+        Solo OPERADOR de la sede del paquete, con el cambio inicial de password completado.
+        Crea un paquete nuevo (tracking, precio y lote nuevos) reutilizando el registro:
+        precio con la tarifa vigente y asignacion automatica de lote con Python.
+        Copia remitente, destinatario, direccion y medidas del paquete fallido; el cuerpo es
+        opcional y solo permite corregir la direccion y el celular del destinatario.
+        Cada paquete admite un solo reintento propio; si el reintento tambien falla, se puede reintentar,
+        hasta un maximo de 3 reintentos por envio (el original mas 3 reintentos).
+        El paquete original se mantiene FALLIDO; el nuevo guarda su id en id_paquete_origen.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PackageId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                direccion:
+                  type: object
+                  description: Solo los campos a corregir; el resto se copia del paquete fallido.
+                  additionalProperties: false
+                  properties:
+                    ubigeo_distrito:
+                      type: string
+                    tipo_via:
+                      type: string
+                    nombre_via:
+                      type: string
+                    numero:
+                      type: string
+                    manzana:
+                      type: string
+                    lote:
+                      type: string
+                    referencia:
+                      type: string
+                destinatario:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    celular:
+                      type: string
+                      example: '998877665'
+      responses:
+        '201':
+          description: Reintento registrado como paquete nuevo
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/RegisterPackageResponse'
+                  - type: object
+                    properties:
+                      id_paquete_origen:
+                        type: integer
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: El paquete no existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '409':
+          description: |
+            reintento_no_permitido (el paquete no esta FALLIDO o el envio ya tuvo 3 reintentos),
+            reintento_existente (ya tiene un reintento) o registro_en_conflicto.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '422':
+          description: Id invalido o correcciones no permitidas o invalidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '503':
+          description: Cotizacion o asignacion no disponibles; no se guarda nada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+
   /api/v1/packages/{id}/history:
     get:
       tags: [Paquetes (prÃ³ximamente)]
@@ -1708,13 +1803,94 @@ paths:
 
   /api/v1/tracking/{trackingId}:
     get:
-      tags: [Seguimiento (prÃ³ximamente)]
-      summary: '[Pendiente] Consultar seguimiento'
+      tags: [Seguimiento]
+      summary: Consultar el seguimiento publico de un envio
+      operationId: getTracking
+      description: |
+        Publico, sin token. Devuelve solo estado, distrito y linea de tiempo; nunca datos del
+        destinatario, direccion exacta, remitente, costo, conductor ni comentarios.
+        En un fallo muestra el motivo generico del catalogo. Fechas en hora de Lima.
+        Limite de consultas por IP (por defecto 30 por minuto, TRACKING_RATE_LIMIT_PER_MINUTE);
+        tambien cuentan los codigos invalidos o inexistentes.
       parameters:
-        - $ref: '#/components/parameters/TrackingId'
+        - name: trackingId
+          in: path
+          required: true
+          description: 10 caracteres (2-9 y A-Z sin I ni O). Se aceptan minusculas.
+          schema:
+            type: string
+            example: KKPDAYMUAA
       responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
+        '200':
+          description: Seguimiento del envio
+          headers:
+            X-RateLimit-Limit:
+              schema:
+                type: integer
+            X-RateLimit-Remaining:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tracking_id:
+                    type: string
+                  estado:
+                    type: object
+                    properties:
+                      codigo:
+                        type: string
+                        enum: [EN_ALMACEN, ASIGNADO, EN_RUTA, ENTREGADO, FALLIDO]
+                      nombre:
+                        type: string
+                  destino:
+                    type: object
+                    properties:
+                      distrito:
+                        type: string
+                  fecha_ingreso:
+                    type: string
+                    example: '2026-10-23T10:50:35-05:00'
+                  linea_de_tiempo:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        estado:
+                          type: string
+                        nombre:
+                          type: string
+                        fecha:
+                          type: string
+                        motivo:
+                          type: string
+                          nullable: true
+                          example: Cliente ausente
+        '404':
+          description: No existe un envio con ese codigo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '422':
+          description: El codigo no tiene el formato de seguimiento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '429':
+          description: Demasiadas consultas desde la misma IP
+          headers:
+            Retry-After:
+              description: Segundos que faltan para poder consultar de nuevo
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
 
   /api/v1/dashboard/metrics:
     get:

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Infrastructure\Adapter\Out\Persistence\MySQL;
 
 use App\Application\Exception\InvalidCatalogReference;
+use App\Application\Exception\PackageAlreadyRetried;
 use App\Application\Exception\PackageRegistrationConflict;
 use App\Application\Exception\PricingUnavailable;
 use App\Application\Exception\RegistrationSnapshotChanged;
@@ -186,6 +187,7 @@ final readonly class MySqlPackageRegistrationRepository implements PackageRegist
                 $address = $command->details->address;
                 $id = $this->connection->table('paquetes')->insertGetId(array_merge($command->details->measurements(), [
                     'tracking_id' => $tracking,
+                    'id_paquete_origen' => $command->originPackageId,
                     'id_sede' => $context->sedeId,
                     'id_remitente' => $senderId,
                     'destinatario_nombres' => $recipient['nombres'],
@@ -231,6 +233,10 @@ final readonly class MySqlPackageRegistrationRepository implements PackageRegist
             });
         } catch (QueryException $exception) {
             $mysqlCode = (int) ($exception->errorInfo[1] ?? 0);
+            // uq_paquetes_reintento: otro operador ya creó el reintento de este paquete al mismo tiempo.
+            if ($mysqlCode === 1062 && str_contains($exception->getMessage(), 'uq_paquetes_reintento')) {
+                throw new PackageAlreadyRetried('El paquete ya tiene un reintento');
+            }
             if (in_array($mysqlCode, [1205, 1213], true)
                 || ($mysqlCode === 1062 && (str_contains($exception->getMessage(), 'uq_paquetes_tracking')
                     || str_contains($exception->getMessage(), 'uq_lotes_codigo')))) {
