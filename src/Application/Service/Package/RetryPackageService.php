@@ -18,11 +18,14 @@ use App\Application\Port\Out\Persistence\PackageRetrySourceRepository;
 use App\Domain\Package\PackageDetails;
 
 /**
- * Crea el reintento de un paquete FALLIDO como un paquete nuevo (uno por paquete; si el reintento falla, se puede reintentar).
+ * Crea el reintento de un paquete FALLIDO como un paquete nuevo: uno por paquete y como máximo
+ * MAX_RETRIES por envío (el original más 3 reintentos = 4 intentos de entrega).
  * Reutiliza el registro completo: precio con la tarifa vigente, asignación de Python, lote y tracking nuevos.
  */
 final readonly class RetryPackageService implements RetryPackageUseCase
 {
+    public const MAX_RETRIES = 3;
+
     public function __construct(
         private PackageRetrySourceRepository $sources,
         private RegisterPackageUseCase $register,
@@ -46,7 +49,11 @@ final readonly class RetryPackageService implements RetryPackageUseCase
         if ($source->status !== 'FALLIDO') {
             throw new PackageNotRetryable('Solo se puede reintentar un paquete FALLIDO');
         }
-        // Un reintento que también falla se puede reintentar; cada paquete admite un solo reintento propio.
+        // Un reintento que también falla se puede reintentar, hasta MAX_RETRIES por envío.
+        if ($source->previousRetries >= self::MAX_RETRIES) {
+            throw new PackageNotRetryable('Este envio ya alcanzo el maximo de ' . self::MAX_RETRIES . ' reintentos');
+        }
+        // Cada paquete admite un solo reintento propio.
         if ($source->alreadyRetried) {
             throw new PackageAlreadyRetried('El paquete ya tiene un reintento');
         }

@@ -34,9 +34,9 @@ final class RetryPackageServiceTest extends TestCase
         ];
     }
 
-    private function source(string $status = 'FALLIDO', int $sedeId = 1, bool $retried = false): PackageRetrySource
+    private function source(string $status = 'FALLIDO', int $sedeId = 1, bool $retried = false, int $previousRetries = 0): PackageRetrySource
     {
-        return new PackageRetrySource($sedeId, $status, $retried, self::input());
+        return new PackageRetrySource($sedeId, $status, $retried, $previousRetries, self::input());
     }
 
     private function operator(?int $sedeId = 1, string $role = 'OPERADOR', bool $mustChange = false): AuthenticatedUser
@@ -135,6 +135,25 @@ final class RetryPackageServiceTest extends TestCase
             ->willReturn($this->newPackage());
 
         $this->service($this->source(), $register)->execute(new RetryPackageCommand($this->operator(), 6));
+    }
+
+    public function test_permite_el_tercer_reintento_de_un_envio(): void
+    {
+        // El paquete fallido ya es el segundo reintento: el que se crea ahora es el tercero y último.
+        $register = $this->createMock(RegisterPackageUseCase::class);
+        $register->expects($this->once())->method('execute')->willReturn($this->newPackage());
+
+        $this->service($this->source(previousRetries: 2), $register)->execute(new RetryPackageCommand($this->operator(), 9));
+    }
+
+    public function test_no_permite_un_cuarto_reintento(): void
+    {
+        $register = $this->createMock(RegisterPackageUseCase::class);
+        $register->expects($this->never())->method('execute');
+
+        $this->expectException(PackageNotRetryable::class);
+        $this->expectExceptionMessage('maximo de 3 reintentos');
+        $this->service($this->source(previousRetries: 3), $register)->execute(new RetryPackageCommand($this->operator(), 11));
     }
 
     public function test_un_paquete_con_reintento_no_crea_otro(): void

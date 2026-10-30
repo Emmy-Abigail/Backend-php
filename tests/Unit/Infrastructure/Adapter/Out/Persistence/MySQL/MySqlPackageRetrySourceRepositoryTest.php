@@ -36,6 +36,9 @@ final class MySqlPackageRetrySourceRepositoryTest extends TestCase
             $package + ['id' => 2, 'id_paquete_origen' => null, 'estado_actual_id' => 5],
             $package + ['id' => 6, 'id_paquete_origen' => 2, 'estado_actual_id' => 4],
             $package + ['id' => 7, 'id_paquete_origen' => null, 'estado_actual_id' => 5],
+            // Cadena del envío 2: 2 (original) -> 6 -> 8 -> 9 (tercer reintento).
+            $package + ['id' => 8, 'id_paquete_origen' => 6, 'estado_actual_id' => 5],
+            $package + ['id' => 9, 'id_paquete_origen' => 8, 'estado_actual_id' => 5],
         ]);
         $this->repository = new MySqlPackageRetrySourceRepository($this->db);
     }
@@ -59,8 +62,18 @@ final class MySqlPackageRetrySourceRepositoryTest extends TestCase
     public function test_detecta_si_ya_tiene_reintento(): void
     {
         self::assertTrue($this->repository->findRetrySource(2)->alreadyRetried);
-        // El 6 es un reintento del 2, pero todavía no tiene un reintento propio.
-        self::assertFalse($this->repository->findRetrySource(6)->alreadyRetried);
+        self::assertTrue($this->repository->findRetrySource(6)->alreadyRetried);
+        // El 9 es el último de la cadena: todavía no tiene un reintento propio.
+        self::assertFalse($this->repository->findRetrySource(9)->alreadyRetried);
         self::assertNull($this->repository->findRetrySource(999));
+    }
+
+    public function test_cuenta_los_reintentos_anteriores_de_la_cadena(): void
+    {
+        self::assertSame(0, $this->repository->findRetrySource(2)->previousRetries);
+        self::assertSame(1, $this->repository->findRetrySource(6)->previousRetries);
+        self::assertSame(2, $this->repository->findRetrySource(8)->previousRetries);
+        self::assertSame(3, $this->repository->findRetrySource(9)->previousRetries);
+        self::assertSame(0, $this->repository->findRetrySource(7)->previousRetries);
     }
 }

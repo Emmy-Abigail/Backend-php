@@ -23,6 +23,7 @@ final readonly class MySqlPackageRetrySourceRepository implements PackageRetrySo
             ->first([
                 'p.id_sede',
                 'e.codigo as estado',
+                'p.id_paquete_origen',
                 'c.tipo_documento',
                 'c.numero_documento',
                 'c.nombres_razon_social',
@@ -53,6 +54,7 @@ final readonly class MySqlPackageRetrySourceRepository implements PackageRetrySo
             (int) $row->id_sede,
             (string) $row->estado,
             $alreadyRetried,
+            $this->previousRetries($row->id_paquete_origen),
             [
                 'remitente' => [
                     'tipo_documento' => $row->tipo_documento,
@@ -81,5 +83,18 @@ final readonly class MySqlPackageRetrySourceRepository implements PackageRetrySo
                 'alto_cm' => (string) $row->alto_cm,
             ],
         );
+    }
+
+    /** Recorre id_paquete_origen hacia atrás hasta el paquete original y cuenta los saltos. */
+    private function previousRetries(mixed $originId): int
+    {
+        $count = 0;
+        // El tope solo protege de un ciclo imposible en datos corruptos; la cadena real nunca pasa del máximo de reintentos.
+        while ($originId !== null && $count < 50) {
+            $count++;
+            $originId = $this->connection->table('paquetes')->where('id', (int) $originId)->value('id_paquete_origen');
+        }
+
+        return $count;
     }
 }

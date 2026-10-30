@@ -1020,7 +1020,8 @@ paths:
         precio con la tarifa vigente y asignacion automatica de lote con Python.
         Copia remitente, destinatario, direccion y medidas del paquete fallido; el cuerpo es
         opcional y solo permite corregir la direccion y el celular del destinatario.
-        Cada paquete admite un solo reintento propio; si el reintento tambien falla, se puede reintentar.
+        Cada paquete admite un solo reintento propio; si el reintento tambien falla, se puede reintentar,
+        hasta un maximo de 3 reintentos por envio (el original mas 3 reintentos).
         El paquete original se mantiene FALLIDO; el nuevo guarda su id en id_paquete_origen.
       security:
         - bearerAuth: []
@@ -1084,7 +1085,7 @@ paths:
                 $ref: '#/components/schemas/MessageResponse'
         '409':
           description: |
-            reintento_no_permitido (el paquete no esta FALLIDO),
+            reintento_no_permitido (el paquete no esta FALLIDO o el envio ya tuvo 3 reintentos),
             reintento_existente (ya tiene un reintento) o registro_en_conflicto.
           content:
             application/json:
