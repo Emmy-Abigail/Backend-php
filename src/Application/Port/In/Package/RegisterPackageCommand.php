@@ -9,7 +9,11 @@ use App\Domain\Package\PackageDetails;
 
 final readonly class RegisterPackageCommand
 {
-    public function __construct(public AuthenticatedUser $operator, public PackageDetails $details)
-    {
+    /** @param int|null $originPackageId Paquete FALLIDO del que este registro es el reintento; null en un registro normal. */
+    public function __construct(
+        public AuthenticatedUser $operator,
+        public PackageDetails $details,
+        public ?int $originPackageId = null,
+    ) {
     }
 }
