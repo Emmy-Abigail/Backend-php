@@ -50,8 +50,12 @@ final readonly class FinalStatusAction
             $status = $body['estado'] ?? null;
             $observation = $body['observacion'] ?? null;
             $rawReason = $body['id_motivo'] ?? null;
+            $otherReason = $body['motivo_otro'] ?? null;
             if (!is_string($status) || ($observation !== null && !is_string($observation))) {
                 throw new InvalidFinalStatus('estado y observacion deben ser texto');
+            }
+            if ($otherReason !== null && !is_string($otherReason)) {
+                throw new InvalidFinalStatus('motivo_otro debe ser texto');
             }
             $reasonId = null;
             if ($rawReason !== null) {
@@ -77,7 +81,7 @@ final readonly class FinalStatusAction
                     $photo = $this->readPhoto($upload);
                 }
             }
-            $command = new FinalStatusCommand($driver, (int) $rawId, $status, $reasonId, $observation, $photo);
+            $command = new FinalStatusCommand($driver, (int) $rawId, $status, $reasonId, $observation, $photo, $otherReason);
             $result = $this->useCase->execute($command);
             return $this->json($response, 200, $result->toArray());
         } catch (InvalidFinalStatus $exception) {

@@ -1066,6 +1066,10 @@ paths:
                               type: string
                             nombre:
                               type: string
+                            detalle:
+                              type: string
+                              nullable: true
+                              description: Lo que escribio el conductor con el motivo Otros; null en los demas
                         comentario:
                           type: string
                           nullable: true
@@ -1642,6 +1646,9 @@ paths:
         Una resolucion que exceda la memoria disponible del servidor se rechaza con 422;
         el cliente debe reducir las dimensiones antes de reintentar.
         FALLIDO requiere id_motivo del catalogo y observacion no vacia; no admite foto.
+        Con el motivo Otros (codigo OTRO) tambien requiere motivo_otro: lo que escribe el
+        conductor como motivo, de 5 a 255 caracteres. Con otro motivo, motivo_otro no se
+        admite; si llega vacio se ignora (campo oculto del formulario).
         Las observaciones se recortan y admiten hasta 65535 bytes de texto UTF-8.
         La foto se guarda fuera de public con una clave aleatoria privada.
         Si falla el almacenamiento, no se cambia el estado ni se guarda historial.
@@ -1688,6 +1695,12 @@ paths:
                       type: integer
                       minimum: 1
                       description: ID de GET /api/v1/failure-reasons o GET /api/v1/catalogs
+                    motivo_otro:
+                      type: string
+                      minLength: 5
+                      maxLength: 255
+                      description: Obligatorio solo si id_motivo es el motivo Otros (codigo OTRO)
+                      example: Edificio cerrado por fumigacion
                     observacion:
                       type: string
                       minLength: 1

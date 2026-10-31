@@ -28,11 +28,12 @@ final class DeliveryDatabaseFixture
         });
         $schema->table('historial_estados', static function (Blueprint $table): void {
             $table->unsignedTinyInteger('id_motivo_fallo')->nullable();
+            $table->string('motivo_otro')->nullable();
             $table->text('comentario')->nullable();
             $table->string('evidencia_key')->nullable();
         });
         $db->table('estados_paquete')->insert(['id' => 5, 'codigo' => 'FALLIDO']);
-        $db->table('motivos_fallo')->insert(['id' => 1, 'codigo' => 'CLIENTE_AUSENTE']);
+        $db->table('motivos_fallo')->insert([['id' => 1, 'codigo' => 'CLIENTE_AUSENTE'], ['id' => 4, 'codigo' => 'OTRO']]);
         $db->table('lotes')->where('id', 210)->update(['estado' => 'EN_RUTA', 'started_at' => '2026-10-24 14:00:00']);
         $db->table('paquetes')->where('id_lote', 210)->update(['estado_actual_id' => 3]);
         $db->table('paquetes')->where('id', 4)->update(['id_sede' => 2]);

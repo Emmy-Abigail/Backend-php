@@ -245,6 +245,7 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
                 'u.rol as usuario_rol',
                 'm.codigo as motivo_codigo',
                 'm.nombre as motivo_nombre',
+                'h.motivo_otro',
                 'h.comentario',
                 'h.evidencia_key',
                 'h.created_at',
@@ -258,7 +259,12 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
                 'estado_nuevo_nombre' => $row->nuevo_nombre,
                 'fecha' => $this->formatDate($row->created_at),
                 'usuario' => ['nombres' => $row->usuario, 'rol' => $row->usuario_rol],
-                'motivo_fallo' => $row->motivo_codigo === null ? null : ['codigo' => $row->motivo_codigo, 'nombre' => $row->motivo_nombre],
+                // detalle: lo que escribió el conductor al elegir "Otros"; null en los demás motivos.
+                'motivo_fallo' => $row->motivo_codigo === null ? null : [
+                    'codigo' => $row->motivo_codigo,
+                    'nombre' => $row->motivo_nombre,
+                    'detalle' => $row->motivo_otro,
+                ],
                 'comentario' => $row->comentario,
                 // La foto se sirve aparte (#10); aquí solo se indica si existe, sin exponer su ubicación.
                 'tiene_evidencia' => $row->evidencia_key !== null,

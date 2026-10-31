@@ -33,7 +33,7 @@ final class MySqlPackageQueryRepositoryTest extends TestCase
             'CREATE TABLE lotes (id INTEGER PRIMARY KEY, codigo TEXT, estado TEXT, id_conductor INTEGER, id_tipo_vehiculo INTEGER)',
             'CREATE TABLE usuarios (id INTEGER PRIMARY KEY, nombres TEXT, rol TEXT, placa TEXT)',
             'CREATE TABLE motivos_fallo (id INTEGER PRIMARY KEY, codigo TEXT, nombre TEXT)',
-            'CREATE TABLE historial_estados (id INTEGER PRIMARY KEY, id_paquete INTEGER, estado_anterior_id INTEGER, estado_nuevo_id INTEGER, id_usuario_ejecutor INTEGER, id_motivo_fallo INTEGER, comentario TEXT, evidencia_key TEXT, created_at TEXT)',
+            'CREATE TABLE historial_estados (id INTEGER PRIMARY KEY, id_paquete INTEGER, estado_anterior_id INTEGER, estado_nuevo_id INTEGER, id_usuario_ejecutor INTEGER, id_motivo_fallo INTEGER, motivo_otro TEXT, comentario TEXT, evidencia_key TEXT, created_at TEXT)',
             'CREATE TABLE paquetes (id INTEGER PRIMARY KEY, tracking_id TEXT, id_sede INTEGER, id_remitente INTEGER, destinatario_nombres TEXT, destinatario_dni TEXT, destinatario_celular TEXT, destinatario_correo TEXT, ubigeo_destino TEXT, tipo_via TEXT, nombre_via TEXT, numero TEXT, manzana TEXT, lote_predio TEXT, referencia TEXT, destino_lat NUMERIC, destino_lng NUMERIC, peso_kg NUMERIC, largo_cm NUMERIC, ancho_cm NUMERIC, alto_cm NUMERIC, costo_estimado NUMERIC, estado_actual_id INTEGER, id_lote INTEGER, orden_parada INTEGER, fecha_ingreso TEXT)',
         ] as $sql) {
             $this->db->unprepared($sql);
@@ -163,6 +163,7 @@ final class MySqlPackageQueryRepositoryTest extends TestCase
         self::assertSame('2026-10-24T00:00:00-05:00', $history[0]['fecha']);
         self::assertSame('No respondio', $history[3]['comentario']);
         self::assertSame('AUSENTE', $history[3]['motivo_fallo']['codigo']);
+        self::assertNull($history[3]['motivo_fallo']['detalle']);
         $delivered = $this->repository->findDetail(3)->history[0];
         self::assertTrue($delivered['tiene_evidencia']);
         self::assertArrayNotHasKey('evidencia_key', $delivered);
@@ -195,6 +196,26 @@ final class MySqlPackageQueryRepositoryTest extends TestCase
         foreach (['Cliente 2', '41234567', '912345678', 'Prueba', 'Remitente', 'Conductor', 'TEST01', 'Vecino dijo'] as $private) {
             self::assertStringNotContainsString($private, $json);
         }
+    }
+
+    public function test_historial_incluye_el_motivo_escrito_cuando_es_otros(): void
+    {
+        $this->db->table('motivos_fallo')->insert(['id' => 4, 'codigo' => 'OTRO', 'nombre' => 'Otros']);
+        $this->db->table('historial_estados')->insert([
+            'id' => 1, 'id_paquete' => 2, 'estado_anterior_id' => 5, 'estado_nuevo_id' => 3, 'id_usuario_ejecutor' => 7,
+            'id_motivo_fallo' => 4, 'motivo_otro' => 'Edificio cerrado por fumigacion', 'comentario' => 'Volver el lunes',
+            'evidencia_key' => null, 'created_at' => '2026-10-24 07:00:00',
+        ]);
+
+        $event = $this->repository->findDetail(2)->history[0];
+
+        self::assertSame(['codigo' => 'OTRO', 'nombre' => 'Otros', 'detalle' => 'Edificio cerrado por fumigacion'], $event['motivo_fallo']);
+        self::assertSame('Volver el lunes', $event['comentario']);
+
+        // El tracking publico solo muestra el nombre del motivo, nunca lo que escribio el conductor.
+        $tracking = json_encode($this->repository->findPublicTracking('TEST2'));
+        self::assertStringContainsString('Otros', $tracking);
+        self::assertStringNotContainsString('fumigacion', $tracking);
     }
 
     public function test_tracking_de_un_codigo_inexistente(): void

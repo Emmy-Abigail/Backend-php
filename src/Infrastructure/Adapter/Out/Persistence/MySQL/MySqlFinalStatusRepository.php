@@ -52,8 +52,18 @@ final readonly class MySqlFinalStatusRepository implements FinalStatusRepository
         if ($batch->estado !== 'EN_RUTA' || $status !== 'EN_RUTA' || $batch->closed_at !== null) {
             throw new InvalidPackageTransition('El lote y el paquete deben estar EN_RUTA');
         }
-        if ($command->reasonId !== null && !$this->connection->table('motivos_fallo')->where('id', $command->reasonId)->exists()) {
-            throw new InvalidFinalStatus('El id_motivo no existe en el catalogo de motivos de fallo');
+        if ($command->reasonId !== null) {
+            $reasonCode = $this->connection->table('motivos_fallo')->where('id', $command->reasonId)->value('codigo');
+            if ($reasonCode === null) {
+                throw new InvalidFinalStatus('El id_motivo no existe en el catalogo de motivos de fallo');
+            }
+            // "Otros" exige describir el motivo; los demás motivos no lo admiten.
+            if ($reasonCode === 'OTRO' && $command->otherReason === null) {
+                throw new InvalidFinalStatus('Con el motivo Otros debes describir el motivo en motivo_otro');
+            }
+            if ($reasonCode !== 'OTRO' && $command->otherReason !== null) {
+                throw new InvalidFinalStatus('motivo_otro solo se envia con el motivo Otros');
+            }
         }
     }
 
@@ -96,6 +106,7 @@ final readonly class MySqlFinalStatusRepository implements FinalStatusRepository
                     'estado_nuevo_id' => (int) $states->get($command->status),
                     'id_usuario_ejecutor' => $command->driver->id,
                     'id_motivo_fallo' => $command->reasonId,
+                    'motivo_otro' => $command->otherReason,
                     'comentario' => $command->observation === '' ? null : $command->observation,
                     'evidencia_key' => $evidenceKey,
                     'created_at' => $timestamp,

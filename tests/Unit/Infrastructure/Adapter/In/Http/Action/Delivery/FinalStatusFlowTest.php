@@ -155,7 +155,35 @@ final class FinalStatusFlowTest extends TestCase
             [['estado' => 'FALLIDO', 'id_motivo' => [], 'observacion' => 'Cliente ausente']],
             [['estado' => 'FALLIDO', 'id_motivo' => '1', 'observacion' => ['texto']]],
             [['estado' => 'FALLIDO', 'id_motivo' => '1', 'observacion' => str_repeat('x', 65536)]],
+            'otros sin motivo_otro' => [['estado' => 'FALLIDO', 'id_motivo' => '4', 'observacion' => 'Sin detalle']],
+            'otros con motivo_otro en blanco' => [['estado' => 'FALLIDO', 'id_motivo' => '4', 'motivo_otro' => '   ', 'observacion' => 'Sin detalle']],
+            'otros con motivo_otro muy corto' => [['estado' => 'FALLIDO', 'id_motivo' => '4', 'motivo_otro' => 'abc', 'observacion' => 'Corto']],
+            'otros con motivo_otro muy largo' => [['estado' => 'FALLIDO', 'id_motivo' => '4', 'motivo_otro' => str_repeat('x', 256), 'observacion' => 'Largo']],
+            'otros con motivo_otro que no es texto' => [['estado' => 'FALLIDO', 'id_motivo' => '4', 'motivo_otro' => ['Edificio cerrado'], 'observacion' => 'Lista']],
+            'otros sin observacion' => [['estado' => 'FALLIDO', 'id_motivo' => '4', 'motivo_otro' => 'Edificio cerrado']],
+            'motivo_otro con otro motivo' => [['estado' => 'FALLIDO', 'id_motivo' => '1', 'motivo_otro' => 'No corresponde aqui', 'observacion' => 'Cliente ausente']],
         ];
+    }
+
+    public function test_fallo_con_motivo_otros_guarda_lo_escrito_aparte_de_la_observacion(): void
+    {
+        $response = $this->send(['estado' => 'FALLIDO', 'id_motivo' => '4', 'motivo_otro' => '  Edificio cerrado por fumigación  ', 'observacion' => 'Volver el lunes']);
+
+        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        $history = $this->db->table('historial_estados')->first();
+        self::assertSame(4, $history->id_motivo_fallo);
+        self::assertSame('Edificio cerrado por fumigación', $history->motivo_otro);
+        self::assertSame('Volver el lunes', $history->comentario);
+        self::assertSame(5, $this->db->table('paquetes')->where('id', 1)->value('estado_actual_id'));
+    }
+
+    public function test_motivo_otro_vacio_con_un_motivo_normal_se_ignora(): void
+    {
+        // El frontend puede enviar el campo oculto vacío cuando no se eligió "Otros".
+        $response = $this->send(['estado' => 'FALLIDO', 'id_motivo' => '1', 'motivo_otro' => '', 'observacion' => 'Cliente ausente']);
+
+        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertNull($this->db->table('historial_estados')->value('motivo_otro'));
     }
 
     #[DataProvider('invalidForms')]

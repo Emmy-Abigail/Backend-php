@@ -11,6 +11,9 @@ final readonly class FinalStatusCommand
 {
     public ?string $observation;
 
+    /** Motivo escrito por el conductor cuando elige "Otros"; null en los demás casos. */
+    public ?string $otherReason;
+
     public function __construct(
         public AuthenticatedUser $driver,
         public int $packageId,
@@ -18,8 +21,21 @@ final readonly class FinalStatusCommand
         public ?int $reasonId = null,
         ?string $observation = null,
         public ?EvidencePhoto $photo = null,
+        ?string $otherReason = null,
     ) {
         $this->observation = $observation === null ? null : trim($observation);
+        // Un campo oculto del formulario puede llegar vacío: se trata como no enviado.
+        $otherReason = $otherReason === null ? null : trim($otherReason);
+        $this->otherReason = $otherReason === '' ? null : $otherReason;
+        if ($this->otherReason !== null) {
+            if ($status !== 'FALLIDO') {
+                throw new InvalidFinalStatus('motivo_otro solo se envia al registrar un FALLIDO');
+            }
+            $length = preg_match('//u', $this->otherReason) === 1 ? mb_strlen($this->otherReason) : -1;
+            if ($length < 5 || $length > 255) {
+                throw new InvalidFinalStatus('motivo_otro debe tener entre 5 y 255 caracteres');
+            }
+        }
         if ($packageId < 1 || !in_array($status, ['ENTREGADO', 'FALLIDO'], true)) {
             throw new InvalidFinalStatus('El paquete y el estado final deben ser validos');
         }
