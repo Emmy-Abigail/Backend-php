@@ -17,6 +17,8 @@ final readonly class PackageRetrySource
         /** Reintentos anteriores en la cadena de este envío: 0 si es el paquete original, 1 si es el primer reintento, etc. */
         public int $previousRetries,
         public array $registrationInput,
+        public ?string $lastStatus = null,
+        public ?string $failureReason = null,
     ) {
     }
 }

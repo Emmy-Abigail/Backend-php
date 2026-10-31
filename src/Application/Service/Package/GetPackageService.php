@@ -11,6 +11,7 @@ use App\Application\Port\In\Package\GetPackageQuery;
 use App\Application\Port\In\Package\GetPackageResult;
 use App\Application\Port\In\Package\GetPackageUseCase;
 use App\Application\Port\Out\Persistence\PackageQueryRepository;
+use App\Domain\Package\AddressCorrectionPolicy;
 
 final readonly class GetPackageService implements GetPackageUseCase
 {
@@ -39,7 +40,16 @@ final readonly class GetPackageService implements GetPackageUseCase
                 throw new PackageAccessDenied('No puede ver paquetes de otra sede');
             }
 
-            return new GetPackageResult($detail->data + ['historial' => $detail->history]);
+            $last = $detail->history === [] ? [] : $detail->history[array_key_last($detail->history)];
+
+            return new GetPackageResult($detail->data + [
+                'historial' => $detail->history,
+                'requiere_corregir_direccion' => AddressCorrectionPolicy::requiresForRetry(
+                    $detail->data['estado']['codigo'] ?? null,
+                    $last['estado_nuevo'] ?? null,
+                    $last['motivo_fallo']['codigo'] ?? null,
+                ),
+            ]);
         }
 
         if ($detail->driverId !== $viewer->id || !in_array($detail->batchStatus, self::DRIVER_BATCH_STATUSES, true)) {
@@ -50,6 +60,6 @@ final readonly class GetPackageService implements GetPackageUseCase
         $data = $detail->data;
         unset($data['remitente'], $data['costo_estimado']);
 
-        return new GetPackageResult($data + ['historial' => $detail->history]);
+        return new GetPackageResult($data + ['historial' => $detail->history, 'requiere_corregir_direccion' => false]);
     }
 }

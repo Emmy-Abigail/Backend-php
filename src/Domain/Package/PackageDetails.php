@@ -8,10 +8,6 @@ use InvalidArgumentException;
 
 final readonly class PackageDetails
 {
-    /** Límites aproximados de Lima Metropolitana y Callao, con margen. */
-    private const LIMA_LAT = Coordinates::LIMA_LAT;
-    private const LIMA_LNG = Coordinates::LIMA_LNG;
-
     /** @param array<string, string|null> $sender @param array<string, string|null> $recipient @param array<string, string|null> $address */
     private function __construct(
         public array $sender,
@@ -81,35 +77,13 @@ final readonly class PackageDetails
             'celular' => $text('destinatario', 'celular', 20),
             'correo' => $email('destinatario'),
         ];
-        $address = [
-            'ubigeo_distrito' => $text('direccion', 'ubigeo_distrito', 6),
-            'tipo_via' => $text('direccion', 'tipo_via', 20),
-            'nombre_via' => $text('direccion', 'nombre_via', 120),
-            'numero' => $text('direccion', 'numero', 10, false),
-            'manzana' => $text('direccion', 'manzana', 10, false),
-            'lote' => $text('direccion', 'lote', 10, false),
-            'referencia' => $text('direccion', 'referencia', 255, false),
-            'lat' => null,
-            'lng' => null,
-        ];
-        $hasLat = ($groups['direccion']['lat'] ?? null) !== null;
-        $hasLng = ($groups['direccion']['lng'] ?? null) !== null;
-        if ($hasLat !== $hasLng) {
-            $errors['direccion.' . ($hasLat ? 'lng' : 'lat')] = 'Envie latitud y longitud juntas';
-        } elseif ($hasLat) {
-            foreach (['lat' => self::LIMA_LAT, 'lng' => self::LIMA_LNG] as $key => [$min, $max]) {
-                $value = $groups['direccion'][$key];
-                if ((!is_int($value) && !is_float($value)) || !is_finite((float) $value)) {
-                    $errors["direccion.{$key}"] = 'Debe ser un numero';
-                } elseif ($value < $min || $value > $max) {
-                    $errors["direccion.{$key}"] = 'El punto debe estar dentro de Lima Metropolitana o Callao';
-                } else {
-                    // DECIMAL(9,6): unos 10 cm, más precisión de la que da un mapa.
-                    $address[$key] = number_format(round((float) $value, 6), 6, '.', '');
-                }
-            }
+        $address = [];
+        try {
+            $address = DeliveryAddress::fromArray($groups['direccion']);
+        } catch (InvalidPackageData $exception) {
+            $errors = array_replace($errors, $exception->errors);
         }
-        foreach (['remitente' => $sender, 'destinatario' => $recipient, 'direccion' => $address] as $group => $fields) {
+        foreach (['remitente' => $sender, 'destinatario' => $recipient] as $group => $fields) {
             foreach (array_diff(array_keys($groups[$group]), array_keys($fields)) as $field) {
                 $errors["{$group}.{$field}"] = 'Campo no permitido';
             }
@@ -126,9 +100,6 @@ final readonly class PackageDetails
         }
         if (!preg_match('/^[0-9]{8}$/D', $recipient['dni'] ?? '')) {
             $errors['destinatario.dni'] = 'Debe tener 8 digitos';
-        }
-        if (!preg_match('/^[0-9]{6}$/D', $address['ubigeo_distrito'] ?? '')) {
-            $errors['direccion.ubigeo_distrito'] = 'Debe ser un UBIGEO de 6 digitos';
         }
         foreach (['remitente', 'destinatario'] as $group) {
             $phone = $group === 'remitente' ? $sender['celular'] : $recipient['celular'];

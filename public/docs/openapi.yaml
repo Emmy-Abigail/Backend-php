@@ -897,6 +897,10 @@ paths:
         El historial va del cambio mas antiguo al mas reciente y no expone la ubicacion de la evidencia.
         Incluye vehiculo (id, codigo y nombre) tomado del lote, incluso antes de asignar conductor.
         Si un paquete no tiene lote, vehiculo es null. Las fechas usan ISO 8601 con offset -05:00.
+        requiere_corregir_direccion indica si Reasignar debe abrir el formulario de direccion:
+        solo es true para FALLIDO cuyo ultimo evento es FALLIDO por DIRECCION_ERRONEA.
+        El operador debe enviar una direccion corregida en POST /packages/{id}/retry.
+        Para el conductor siempre es false. No habilita editar el paquete original.
       security:
         - bearerAuth: []
       parameters:
@@ -913,6 +917,9 @@ paths:
                     type: integer
                   tracking_id:
                     type: string
+                  requiere_corregir_direccion:
+                    type: boolean
+                    description: Indica que Reasignar exige corregir la direccion antes de crear el reintento.
                   sede:
                     type: object
                     properties:
@@ -1102,7 +1109,16 @@ paths:
         Crea un paquete nuevo (tracking, precio y lote nuevos) reutilizando el registro:
         precio con la tarifa vigente y asignacion automatica de lote con Python.
         Copia remitente, destinatario, direccion y medidas del paquete fallido; el cuerpo es
-        opcional y solo permite corregir la direccion y el celular del destinatario.
+        opcional para los motivos habituales y permite corregir la direccion y el celular del destinatario.
+        Si el ultimo evento es FALLIDO por DIRECCION_ERRONEA, exige un objeto direccion con
+        al menos un cambio real respecto al intento original; en ese caso solo admite direccion.
+        El frontend debe abrir el formulario de direccion al pulsar Reasignar y enviar una sola
+        peticion al confirmar. GET /packages/{id} devuelve requiere_corregir_direccion para decidirlo.
+        Valida la direccion con las mismas reglas del registro, incluido el distrito activo y el punto
+        dentro de Lima/Callao. lat y lng se envian juntas como numeros, o ambas null. Si cambia
+        la direccion fisica sin enviar coordenadas, descarta el punto anterior.
+        La correccion se aplica exclusivamente al nuevo intento. No modifica la direccion ni el
+        historial originales; si falla la validacion, cotizacion o asignacion, no guarda una correccion parcial.
         Cada paquete admite un solo reintento propio; si el reintento tambien falla, se puede reintentar,
         hasta un maximo de 3 reintentos por envio (el original mas 3 reintentos).
         El paquete original se mantiene FALLIDO; el nuevo guarda su id en id_paquete_origen.
@@ -1119,24 +1135,7 @@ paths:
               additionalProperties: false
               properties:
                 direccion:
-                  type: object
-                  description: Solo los campos a corregir; el resto se copia del paquete fallido.
-                  additionalProperties: false
-                  properties:
-                    ubigeo_distrito:
-                      type: string
-                    tipo_via:
-                      type: string
-                    nombre_via:
-                      type: string
-                    numero:
-                      type: string
-                    manzana:
-                      type: string
-                    lote:
-                      type: string
-                    referencia:
-                      type: string
+                  $ref: '#/components/schemas/PackageAddressPatch'
                 destinatario:
                   type: object
                   additionalProperties: false
@@ -1144,6 +1143,21 @@ paths:
                     celular:
                       type: string
                       example: '998877665'
+            examples:
+              reasignacionDirecta:
+                summary: Otros motivos; sin correcciones
+                value: {}
+              direccionCorregida:
+                summary: Confirmacion del formulario para DIRECCION_ERRONEA
+                value:
+                  direccion:
+                    ubigeo_distrito: '150101'
+                    tipo_via: Jr.
+                    nombre_via: Ica
+                    numero: '172'
+                    referencia: Frente al parque
+                    lat: -12.046597
+                    lng: -77.032719
       responses:
         '201':
           description: Reintento registrado como paquete nuevo
@@ -1175,11 +1189,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
         '422':
-          description: Id invalido o correcciones no permitidas o invalidas
+          description: Id invalido, correcciones invalidas, direccion obligatoria por DIRECCION_ERRONEA o sin cambios reales
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: datos_invalidos
+                message: Revisa los campos del paquete
+                campos:
+                  direccion: Corrige la direccion antes de reasignar un paquete fallido por Direccion erronea
         '503':
           description: Cotizacion o asignacion no disponibles; no se guarda nada
           content:
@@ -2026,6 +2045,50 @@ components:
           type: integer
           minimum: 1
           example: 2
+
+    PackageAddressPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Campos parciales de direccion. lat y lng deben enviarse juntos.
+      properties:
+        ubigeo_distrito:
+          type: string
+          pattern: '^[0-9]{6}$'
+        tipo_via:
+          type: string
+          minLength: 1
+          maxLength: 20
+        nombre_via:
+          type: string
+          minLength: 1
+          maxLength: 120
+        numero:
+          type: string
+          nullable: true
+          maxLength: 10
+        manzana:
+          type: string
+          nullable: true
+          maxLength: 10
+        lote:
+          type: string
+          nullable: true
+          maxLength: 10
+        referencia:
+          type: string
+          nullable: true
+          maxLength: 255
+        lat:
+          type: number
+          nullable: true
+          minimum: -12.60
+          maximum: -11.50
+        lng:
+          type: number
+          nullable: true
+          minimum: -77.30
+          maximum: -76.55
 
     RegisterPackageRequest:
       type: object

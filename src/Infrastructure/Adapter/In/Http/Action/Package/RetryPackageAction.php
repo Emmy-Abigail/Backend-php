@@ -17,6 +17,7 @@ use App\Application\Port\In\Auth\AuthenticatedUser;
 use App\Application\Port\In\Package\RetryPackageCommand;
 use App\Application\Port\In\Package\RetryPackageUseCase;
 use App\Domain\Package\InvalidPackageData;
+use App\Domain\Package\DeliveryAddress;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
@@ -39,7 +40,7 @@ final readonly class RetryPackageAction
             return $this->json($response, ['error' => 'id_invalido', 'message' => 'El id del paquete no es valido'], 422);
         }
 
-        // El cuerpo es opcional: sin cuerpo se copia todo del paquete fallido.
+        // El servicio exige direccion corregida si el ultimo fallo fue DIRECCION_ERRONEA.
         $body = $request->getParsedBody() ?? [];
         if (!is_array($body) || ($body !== [] && array_is_list($body))) {
             return $this->json($response, ['error' => 'cuerpo_invalido', 'message' => 'El cuerpo debe ser un objeto JSON valido'], 400);
@@ -94,6 +95,11 @@ final readonly class RetryPackageAction
         if (is_array($body['destinatario'] ?? null)) {
             foreach (array_diff(array_keys($body['destinatario']), ['celular']) as $field) {
                 $errors["destinatario.{$field}"] = 'Del destinatario solo se puede corregir el celular';
+            }
+        }
+        if (is_array($body['direccion'] ?? null)) {
+            foreach (array_diff(array_keys($body['direccion']), DeliveryAddress::FIELDS) as $field) {
+                $errors["direccion.{$field}"] = 'Campo no permitido en la direccion';
             }
         }
 

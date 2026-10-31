@@ -16,6 +16,9 @@ use App\Application\Port\In\Package\RetryPackageCommand;
 use App\Application\Port\In\Package\RetryPackageUseCase;
 use App\Application\Port\Out\Persistence\PackageRetrySourceRepository;
 use App\Domain\Package\PackageDetails;
+use App\Domain\Package\DeliveryAddress;
+use App\Domain\Package\AddressCorrectionPolicy;
+use App\Domain\Package\InvalidPackageData;
 
 /**
  * Crea el reintento de un paquete FALLIDO como un paquete nuevo: uno por paquete y como máximo
@@ -58,8 +61,25 @@ final readonly class RetryPackageService implements RetryPackageUseCase
             throw new PackageAlreadyRetried('El paquete ya tiene un reintento');
         }
 
+        $requiresAddress = AddressCorrectionPolicy::requiresForRetry($source->status, $source->lastStatus, $source->failureReason);
+        if ($requiresAddress) {
+            $errors = [];
+            if (!is_array($command->corrections['direccion'] ?? null) || $command->corrections['direccion'] === []) {
+                $errors['direccion'] = 'Corrige la direccion antes de reasignar un paquete fallido por Direccion erronea';
+            }
+            foreach (array_diff(array_keys($command->corrections), ['direccion']) as $field) {
+                $errors[(string) $field] = 'Para este motivo solo se puede corregir la direccion';
+            }
+            if ($errors !== []) {
+                throw new InvalidPackageData($errors);
+            }
+        }
+
         // PackageDetails valida otra vez todo, incluidas las correcciones.
         $details = PackageDetails::fromArray($this->applyCorrections($source->registrationInput, $command->corrections));
+        if ($requiresAddress && $details->address === DeliveryAddress::fromArray($source->registrationInput['direccion'])) {
+            throw new InvalidPackageData(['direccion' => 'Corrige al menos un campo de la direccion antes de reasignar']);
+        }
 
         return $this->register->execute(new RegisterPackageCommand($operator, $details, $command->packageId));
     }
@@ -72,7 +92,12 @@ final readonly class RetryPackageService implements RetryPackageUseCase
     private function applyCorrections(array $input, array $corrections): array
     {
         if (isset($corrections['direccion']) && is_array($corrections['direccion'])) {
-            $input['direccion'] = array_replace($input['direccion'], $corrections['direccion']);
+            $input['direccion'] = DeliveryAddress::patch($input['direccion'], $corrections['direccion']);
+            foreach (['lat', 'lng'] as $coordinate) {
+                if ($input['direccion'][$coordinate] !== null) {
+                    $input['direccion'][$coordinate] = (float) $input['direccion'][$coordinate];
+                }
+            }
         }
         if (isset($corrections['destinatario']) && is_array($corrections['destinatario'])
             && array_key_exists('celular', $corrections['destinatario'])) {

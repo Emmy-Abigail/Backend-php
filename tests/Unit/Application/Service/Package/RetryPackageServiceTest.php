@@ -102,6 +102,30 @@ final class RetryPackageServiceTest extends TestCase
         }
     }
 
+    public static function retryCoordinates(): array
+    {
+        return [
+            'conserva punto corregido' => [[], '-12.046597', '-77.032719'],
+            'descarta punto al cambiar direccion sin coordenadas' => [['direccion' => ['numero' => '999']], null, null],
+            'sustituye punto' => [['direccion' => ['lat' => -12.12, 'lng' => -77.03]], '-12.120000', '-77.030000'],
+        ];
+    }
+
+    #[DataProvider('retryCoordinates')]
+    public function test_reintento_respeta_el_punto_de_la_direccion_corregida(array $corrections, ?string $lat, ?string $lng): void
+    {
+        $input = self::input();
+        $input['direccion']['lat'] = -12.046597;
+        $input['direccion']['lng'] = -77.032719;
+        $source = new PackageRetrySource(1, 'FALLIDO', false, 0, $input);
+        $register = $this->createMock(RegisterPackageUseCase::class);
+        $register->expects($this->once())->method('execute')
+            ->with($this->callback(static fn (RegisterPackageCommand $c): bool => $c->details->address['lat'] === $lat && $c->details->address['lng'] === $lng))
+            ->willReturn($this->newPackage());
+
+        $this->service($source, $register)->execute(new RetryPackageCommand($this->operator(), 7, $corrections));
+    }
+
     public function test_paquete_inexistente(): void
     {
         $this->expectException(PackageNotFound::class);

@@ -103,6 +103,41 @@ final class GetPackageServiceTest extends TestCase
         $this->service(null)->execute(new GetPackageQuery($this->operator(), 999));
     }
 
+    public static function addressCorrectionCases(): array
+    {
+        return [
+            ['FALLIDO', 'FALLIDO', 'DIRECCION_ERRONEA', true],
+            ['FALLIDO', 'FALLIDO', 'CLIENTE_AUSENTE', false],
+            ['FALLIDO', 'FALLIDO', 'RECHAZADO', false],
+            ['ENTREGADO', 'FALLIDO', 'DIRECCION_ERRONEA', false],
+            ['FALLIDO', 'EN_RUTA', 'DIRECCION_ERRONEA', false],
+            ['FALLIDO', 'FALLIDO', null, false],
+        ];
+    }
+
+    #[DataProvider('addressCorrectionCases')]
+    public function test_indica_si_reasignar_requiere_el_formulario_de_direccion(string $status, string $lastStatus, ?string $reason, bool $expected): void
+    {
+        $detail = new PackageDetail(1, 7, 'EN_RUTA', ['estado' => ['codigo' => $status]], [
+            ['estado_nuevo' => $lastStatus, 'motivo_fallo' => ['codigo' => $reason]],
+        ]);
+        $result = $this->service($detail)->execute(new GetPackageQuery($this->operator(), 10))->toArray();
+        self::assertSame($expected, $result['requiere_corregir_direccion']);
+        $driver = $this->service($detail)->execute(new GetPackageQuery($this->driver(), 10))->toArray();
+        self::assertFalse($driver['requiere_corregir_direccion']);
+    }
+
+    public function test_no_exige_correccion_sin_historial_o_con_otro_motivo_mas_reciente(): void
+    {
+        foreach ([[], [
+            ['estado_nuevo' => 'FALLIDO', 'motivo_fallo' => ['codigo' => 'DIRECCION_ERRONEA']],
+            ['estado_nuevo' => 'FALLIDO', 'motivo_fallo' => ['codigo' => 'CLIENTE_AUSENTE']],
+        ]] as $history) {
+            $detail = new PackageDetail(1, 7, 'EN_RUTA', ['estado' => ['codigo' => 'FALLIDO']], $history);
+            self::assertFalse($this->service($detail)->execute(new GetPackageQuery($this->operator(), 10))->toArray()['requiere_corregir_direccion']);
+        }
+    }
+
     #[DataProvider('usuariosSinPermiso')]
     public function test_rechaza_a_quien_no_es_operador_con_sede_ni_conductor(AuthenticatedUser $user): void
     {
