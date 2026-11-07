@@ -10,7 +10,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 $projectRoot = dirname(__DIR__);
 
 $dotenv = Dotenv::createImmutable($projectRoot);
-$dotenv->load();
+$dotenv->safeLoad();
 $dotenv->required([
     'APP_ENV',
     'DB_CONNECTION',
