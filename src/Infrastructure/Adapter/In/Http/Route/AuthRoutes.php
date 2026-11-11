@@ -9,6 +9,7 @@ use App\Infrastructure\Adapter\In\Http\Action\Auth\MeAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\RequestPasswordResetAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\SessionStatusAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
+use App\Infrastructure\Adapter\In\Http\Middleware\WarmUpServicesMiddleware;
 use Slim\App;
 
 return static function (
@@ -19,9 +20,14 @@ return static function (
     ChangePasswordAction $changePasswordAction,
     RequestPasswordResetAction $requestPasswordResetAction,
     ConfirmPasswordResetAction $confirmPasswordResetAction,
-    JwtAuthMiddleware $jwtAuthMiddleware
+    JwtAuthMiddleware $jwtAuthMiddleware,
+    ?WarmUpServicesMiddleware $warmUpMiddleware = null
 ): void {
-    $app->post('/api/v1/auth/login', $loginAction);
+    $login = $app->post('/api/v1/auth/login', $loginAction);
+    if ($warmUpMiddleware !== null) {
+        // Despierta a Python mientras el usuario inicia sesion.
+        $login->add($warmUpMiddleware);
+    }
     $app->post('/api/v1/auth/password-reset/request', $requestPasswordResetAction);
     $app->post('/api/v1/auth/password-reset/confirm', $confirmPasswordResetAction);
     $app->get('/api/v1/auth/me', $meAction)->add($jwtAuthMiddleware);

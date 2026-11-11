@@ -60,6 +60,7 @@ use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\MustChangePasswordMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\RateLimitMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
+use App\Infrastructure\Adapter\In\Http\Middleware\WarmUpServicesMiddleware;
 use App\Infrastructure\Adapter\Out\Notification\SmtpUserCredentialsMailer;
 use App\Infrastructure\Adapter\Out\Assignment\HttpBatchAssignmentGateway;
 use App\Infrastructure\Adapter\Out\Geocoding\PhotonGeocodingGateway;
@@ -156,6 +157,14 @@ $changeUserStatusAction = new ChangeUserStatusAction(
     new ChangeUserStatusService($userRepository),
 );
 
+// Ping corto a Python en cada login para que el hosting lo despierte a tiempo.
+$warmUpServiceUrl = rtrim($_ENV['ASSIGNMENT_SERVICE_URL'] ?? '', '/');
+$warmUpMiddleware = new WarmUpServicesMiddleware(
+    new StreamHttpTransport(),
+    $warmUpServiceUrl === '' ? [] : [$warmUpServiceUrl . ($_ENV['SERVICE_WARMUP_PATH'] ?? '/docs')],
+    (float) ($_ENV['SERVICE_WARMUP_TIMEOUT_SECONDS'] ?? 1),
+);
+
 $registerAuthRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/AuthRoutes.php';
 $registerAuthRoutes(
     $app,
@@ -166,6 +175,7 @@ $registerAuthRoutes(
     $requestPasswordResetAction,
     $confirmPasswordResetAction,
     $jwtAuthMiddleware,
+    $warmUpMiddleware,
 );
 
 $registerUserRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php';
