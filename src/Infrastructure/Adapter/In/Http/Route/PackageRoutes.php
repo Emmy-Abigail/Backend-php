@@ -19,20 +19,22 @@ return static function (
     JwtAuthMiddleware $jwtAuthMiddleware,
     RoleMiddleware $operatorRoleMiddleware,
     MustChangePasswordMiddleware $mustChangePasswordMiddleware,
-    RoleMiddleware $operatorOrDriverRoleMiddleware,
     RetryPackageAction $retryPackageAction,
+    RoleMiddleware $readerRoleMiddleware,
 ): void {
     // El historial del paquete viene dentro de GET /packages/{id}.
     $app->post('/api/v1/packages', $registerPackageAction)
         ->add($operatorRoleMiddleware)
         ->add($mustChangePasswordMiddleware)
         ->add($jwtAuthMiddleware);
+    // Consulta: el middleware deja pasar a los tres roles y el servicio aplica los permisos finos
+    // (el conductor no lista, el operador solo ve su sede, el administrador ve todas).
     $app->get('/api/v1/packages', $listPackagesAction)
-        ->add($operatorRoleMiddleware)
+        ->add($readerRoleMiddleware)
         ->add($mustChangePasswordMiddleware)
         ->add($jwtAuthMiddleware);
     $app->get('/api/v1/packages/{id}', $getPackageAction)
-        ->add($operatorOrDriverRoleMiddleware)
+        ->add($readerRoleMiddleware)
         ->add($mustChangePasswordMiddleware)
         ->add($jwtAuthMiddleware);
     $app->post('/api/v1/packages/{id}/retry', $retryPackageAction)

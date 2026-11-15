@@ -693,11 +693,12 @@ paths:
   /api/v1/packages:
     get:
       tags: [Paquetes]
-      summary: Listar paquetes de la sede del operador
+      summary: Listar paquetes (operador su sede, administrador todas)
       operationId: listPackages
       description: |
-        Solo OPERADOR con sede y cambio inicial de password completado.
-        La sede sale de la sesion; no se acepta como parametro.
+        OPERADOR con sede o ADMINISTRADOR, con el cambio inicial de password completado.
+        OPERADOR: siempre su sede, que sale de la sesion; id_sede se ignora.
+        ADMINISTRADOR: todas las sedes, o una sola con id_sede. Cada paquete indica su id_sede.
         Ordena del ingreso mas reciente al mas antiguo.
         Los filtros de fecha representan dias completos de America/Lima; la BD guarda UTC.
         Las fechas de respuesta se devuelven en ISO 8601 con offset -05:00.
@@ -705,6 +706,13 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - name: id_sede
+          in: query
+          required: false
+          description: Solo ADMINISTRADOR. Sin el parametro, todas las sedes. Entero mayor o igual a 1.
+          schema:
+            type: integer
+            minimum: 1
         - name: q
           in: query
           description: Busca por inicio de tracking o DNI del destinatario, o por parte de su nombre. Maximo 100 caracteres.
@@ -759,6 +767,9 @@ paths:
                           type: integer
                         tracking_id:
                           type: string
+                        id_sede:
+                          type: integer
+                          description: Sede del paquete (util para el administrador, que ve varias sedes).
                         destinatario:
                           type: object
                           properties:
@@ -886,9 +897,11 @@ paths:
       operationId: getPackage
       description: |
         OPERADOR: solo paquetes de su sede; ve el detalle completo.
+        ADMINISTRADOR: paquetes de cualquier sede, con el mismo detalle que el operador (solo consulta:
+        reasignar sigue siendo del operador). Lo usa, por ejemplo, el enlace desde los fallidos del dashboard.
         CONDUCTOR: solo paquetes de un lote asignado a el en estado ASIGNADO o EN_RUTA;
         no recibe remitente ni costo_estimado.
-        Ambos deben haber completado el cambio inicial de password.
+        Todos deben haber completado el cambio inicial de password.
         El historial va del cambio mas antiguo al mas reciente y no expone la ubicacion de la evidencia.
         Incluye vehiculo (id, codigo y nombre) tomado del lote, incluso antes de asignar conductor.
         Si un paquete no tiene lote, vehiculo es null. Las fechas usan ISO 8601 con offset -05:00.

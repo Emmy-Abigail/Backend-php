@@ -74,13 +74,21 @@ final readonly class ListPackagesAction
             && $page - 1 > intdiv(PHP_INT_MAX, $perPage)) {
             $errors['page'] = 'La pagina solicitada excede el rango permitido';
         }
+        // Filtro opcional del administrador; para el operador el servicio lo ignora y usa su sede.
+        $sedeId = null;
+        if (array_key_exists('id_sede', $params)) {
+            $sedeId = $this->positiveInt($params['id_sede'], 0);
+            if ($sedeId === null || $sedeId < 1) {
+                $errors['id_sede'] = 'Debe ser un entero mayor o igual a 1';
+            }
+        }
 
         if ($errors !== []) {
             return $this->json($response, ['error' => 'parametros_invalidos', 'message' => 'Parámetros de búsqueda inválidos', 'campos' => $errors], 422);
         }
 
         try {
-            $result = $this->useCase->execute(new ListPackagesQuery($operator, $search, $status, $from, $to, $page, $perPage));
+            $result = $this->useCase->execute(new ListPackagesQuery($operator, $search, $status, $from, $to, $page, $perPage, $sedeId));
         } catch (UserNotAllowed) {
             return $this->json($response, ['error' => 'sin_permisos', 'message' => 'No tiene permisos para listar paquetes'], 403);
         }

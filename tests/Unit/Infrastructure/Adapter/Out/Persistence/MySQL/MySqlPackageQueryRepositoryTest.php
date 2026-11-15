@@ -104,6 +104,17 @@ final class MySqlPackageQueryRepositoryTest extends TestCase
         self::assertSame([], $this->repository->searchBySede(1, 'TEST5', null, null, null, 1, 20)->items);
     }
 
+    public function test_sin_sede_lista_todas_las_sedes_e_indica_la_de_cada_paquete(): void
+    {
+        $data = $this->repository->searchBySede(null, null, null, null, null, 1, 20)->toArray();
+
+        // Los 4 paquetes de la sede 1 y el de la sede 2.
+        self::assertSame(5, $data['meta']['total']);
+        $sedeById = array_column($data['data'], 'id_sede', 'id');
+        self::assertSame(2, $sedeById[5]);
+        self::assertSame(1, $sedeById[2]);
+    }
+
     public function test_detalle_incluye_el_vehiculo_del_lote_y_fecha_de_lima(): void
     {
         $detail = $this->repository->findDetail(2);

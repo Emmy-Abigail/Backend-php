@@ -22,7 +22,7 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
     }
 
     public function searchBySede(
-        int $sedeId,
+        ?int $sedeId,
         ?string $search,
         ?string $status,
         ?string $from,
@@ -32,8 +32,11 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
     ): ListPackagesResult {
         $query = $this->connection->table('paquetes as p')
             ->join('estados_paquete as e', 'e.id', '=', 'p.estado_actual_id')
-            ->join('distritos as d', 'd.ubigeo', '=', 'p.ubigeo_destino')
-            ->where('p.id_sede', $sedeId);
+            ->join('distritos as d', 'd.ubigeo', '=', 'p.ubigeo_destino');
+        // null = todas las sedes (solo el administrador llega aquí sin sede).
+        if ($sedeId !== null) {
+            $query->where('p.id_sede', $sedeId);
+        }
 
         if ($search !== null) {
             $like = addcslashes($search, '\\%_');
@@ -63,6 +66,7 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
             ->get([
                 'p.id',
                 'p.tracking_id',
+                'p.id_sede',
                 'p.destinatario_nombres',
                 'p.destinatario_dni',
                 'p.ubigeo_destino',
@@ -81,6 +85,8 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
             $items[] = [
                 'id' => (int) $row->id,
                 'tracking_id' => $row->tracking_id,
+                // Necesario para el administrador, que puede ver paquetes de varias sedes en la misma lista.
+                'id_sede' => (int) $row->id_sede,
                 'destinatario' => [
                     'nombres' => $row->destinatario_nombres,
                     'dni' => $row->destinatario_dni,

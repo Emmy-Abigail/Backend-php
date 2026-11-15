@@ -18,13 +18,19 @@ final readonly class ListPackagesService implements ListPackagesUseCase
 
     public function execute(ListPackagesQuery $query): ListPackagesResult
     {
-        // La sede siempre sale de la sesión: un operador nunca puede consultar otra sede.
-        if ($query->operator->role !== 'OPERADOR' || $query->operator->idSede === null) {
-            throw new UserNotAllowed('Solo un operador con sede puede listar paquetes');
+        $viewer = $query->operator;
+        if ($viewer->role === 'OPERADOR' && $viewer->idSede !== null) {
+            // La sede del operador siempre sale de la sesión: nunca puede consultar otra sede.
+            $sedeId = $viewer->idSede;
+        } elseif ($viewer->role === 'ADMINISTRADOR') {
+            // El administrador supervisa todas las sedes; id_sede es un filtro opcional.
+            $sedeId = $query->sedeId;
+        } else {
+            throw new UserNotAllowed('Solo un operador con sede o un administrador puede listar paquetes');
         }
 
         return $this->repository->searchBySede(
-            $query->operator->idSede,
+            $sedeId,
             $query->search,
             $query->status,
             $query->from,

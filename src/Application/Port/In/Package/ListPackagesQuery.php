@@ -16,6 +16,8 @@ final readonly class ListPackagesQuery
         public ?string $to = null,
         public int $page = 1,
         public int $perPage = 20,
+        /** Solo administrador: filtra una sede; null = todas. El operador siempre ve la suya. */
+        public ?int $sedeId = null,
     ) {
     }
 }

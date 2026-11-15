@@ -269,8 +269,8 @@ $registerPackageRoutes(
     $jwtAuthMiddleware,
     new RoleMiddleware('OPERADOR'),
     $mustChangePasswordMiddleware,
-    new RoleMiddleware('OPERADOR', 'CONDUCTOR'),
     $retryPackageAction,
+    new RoleMiddleware('OPERADOR', 'CONDUCTOR', 'ADMINISTRADOR'),
 );
 
 // Lotes: consulta (Operador y Conductor) y despacho (Operador). El orden de las paradas lo calcula Python.
