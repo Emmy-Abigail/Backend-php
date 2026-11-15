@@ -252,13 +252,14 @@ $registerPackageService = new RegisterPackageService(
 );
 $registerPackageAction = new RegisterPackageAction($registerPackageService);
 // El reintento de un paquete FALLIDO reutiliza el mismo registro (precio, Python, lote y tracking nuevos).
+$retrySourceRepository = new MySqlPackageRetrySourceRepository(Capsule::connection());
 $retryPackageAction = new RetryPackageAction(new RetryPackageService(
-    new MySqlPackageRetrySourceRepository(Capsule::connection()),
+    $retrySourceRepository,
     $registerPackageService,
 ));
 $packageQueryRepository = new MySqlPackageQueryRepository(Capsule::connection());
 $listPackagesAction = new ListPackagesAction(new ListPackagesService($packageQueryRepository));
-$getPackageAction = new GetPackageAction(new GetPackageService($packageQueryRepository));
+$getPackageAction = new GetPackageAction(new GetPackageService($packageQueryRepository, $retrySourceRepository));
 $registerPackageRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/PackageRoutes.php';
 $registerPackageRoutes(
     $app,

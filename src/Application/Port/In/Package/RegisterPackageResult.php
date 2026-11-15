@@ -6,6 +6,7 @@ namespace App\Application\Port\In\Package;
 
 use App\Application\Port\In\Batch\LimaTime;
 use App\Application\Port\Out\Pricing\PackageQuote;
+use App\Domain\Package\DeliveryEstimate;
 use DateTimeImmutable;
 use DateTimeZone;
 
@@ -34,11 +35,14 @@ final readonly class RegisterPackageResult
     /** @return array<string, mixed> */
     public function toArray(): array
     {
+        $registeredAt = new DateTimeImmutable($this->registeredAt, new DateTimeZone('UTC'));
+
         return [
             'id' => $this->id,
             'tracking_id' => $this->tracking,
             'estado' => 'EN_ALMACEN',
-            'fecha_ingreso' => LimaTime::format(new DateTimeImmutable($this->registeredAt, new DateTimeZone('UTC'))),
+            'fecha_ingreso' => LimaTime::format($registeredAt),
+            'fecha_estimada_entrega' => LimaTime::format(DeliveryEstimate::from($registeredAt)),
             'cotizacion' => ['id_tarifa' => $this->quote->tariffId, 'monto' => (float) $this->quote->amount],
             'lote' => $this->batch,
             'correo_enviado' => $this->emailsSent,

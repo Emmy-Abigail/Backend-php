@@ -920,6 +920,21 @@ paths:
                   requiere_corregir_direccion:
                     type: boolean
                     description: Indica que Reasignar exige corregir la direccion antes de crear el reintento.
+                  reintentos_restantes:
+                    type: integer
+                    nullable: true
+                    minimum: 0
+                    maximum: 3
+                    description: >
+                      Solo para el operador. Reintentos que aun se pueden crear: 3 menos los reintentos previos del envio;
+                      0 si el destinatario lo RECHAZO o si el paquete ya tiene su reintento.
+                      Sirve para deshabilitar Reasignar sin esperar el 409.
+                    example: 2
+                  fecha_estimada_entrega:
+                    type: string
+                    format: date-time
+                    description: Fecha de ingreso + 2 dias, en hora de Lima.
+                    example: '2026-10-26T10:00:00-05:00'
                   sede:
                     type: object
                     properties:
@@ -1182,7 +1197,7 @@ paths:
                 $ref: '#/components/schemas/MessageResponse'
         '409':
           description: |
-            reintento_no_permitido (el paquete no esta FALLIDO o el envio ya tuvo 3 reintentos),
+            reintento_no_permitido (el paquete no esta FALLIDO, el destinatario lo RECHAZO o el envio ya tuvo 3 reintentos),
             reintento_existente (ya tiene un reintento) o registro_en_conflicto.
           content:
             application/json:
@@ -1885,6 +1900,15 @@ paths:
                   fecha_ingreso:
                     type: string
                     example: '2026-10-23T10:50:35-05:00'
+                  fecha_despacho:
+                    type: string
+                    nullable: true
+                    description: Cuando se asigno su lote a un conductor; null mientras sigue en almacen.
+                    example: '2026-10-23T16:40:00-05:00'
+                  fecha_estimada_entrega:
+                    type: string
+                    description: Fecha de ingreso + 2 dias, en hora de Lima.
+                    example: '2026-10-25T10:50:35-05:00'
                   linea_de_tiempo:
                     type: array
                     items:
@@ -2638,6 +2662,11 @@ components:
           format: date-time
           description: Fecha de registro en hora de Lima (-05:00); se almacena en UTC.
           example: '2026-10-24T10:00:00-05:00'
+        fecha_estimada_entrega:
+          type: string
+          format: date-time
+          description: Fecha de registro + 2 dias (regla de entrega en 24 a 48 horas), en hora de Lima.
+          example: '2026-10-26T10:00:00-05:00'
         cotizacion:
           type: object
           required: [id_tarifa, monto]

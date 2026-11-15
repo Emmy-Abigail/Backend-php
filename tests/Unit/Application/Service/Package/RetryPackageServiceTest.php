@@ -180,6 +180,33 @@ final class RetryPackageServiceTest extends TestCase
         $this->service($this->source(previousRetries: 3), $register)->execute(new RetryPackageCommand($this->operator(), 11));
     }
 
+    public function test_un_paquete_rechazado_nunca_se_reintenta(): void
+    {
+        // DEMO 4: RECHAZADO es un flujo cerrado, aunque se llame al endpoint directamente y queden reintentos.
+        $register = $this->createMock(RegisterPackageUseCase::class);
+        $register->expects($this->never())->method('execute');
+        $rejected = new PackageRetrySource(1, 'FALLIDO', false, 0, self::input(), 'FALLIDO', 'RECHAZADO');
+
+        $this->expectException(PackageNotRetryable::class);
+        $this->expectExceptionMessage('rechazo');
+        $this->service($rejected, $register)->execute(new RetryPackageCommand($this->operator(), 7));
+    }
+
+    #[DataProvider('motivosReintentables')]
+    public function test_los_demas_motivos_siguen_permitiendo_el_reintento(string $reason): void
+    {
+        $register = $this->createMock(RegisterPackageUseCase::class);
+        $register->expects($this->once())->method('execute')->willReturn($this->newPackage());
+        $failed = new PackageRetrySource(1, 'FALLIDO', false, 0, self::input(), 'FALLIDO', $reason);
+
+        $this->service($failed, $register)->execute(new RetryPackageCommand($this->operator(), 7));
+    }
+
+    public static function motivosReintentables(): array
+    {
+        return [['CLIENTE_AUSENTE'], ['OTRO']];
+    }
+
     public function test_un_paquete_con_reintento_no_crea_otro(): void
     {
         $register = $this->createMock(RegisterPackageUseCase::class);

@@ -34,6 +34,11 @@ final class RegisterPackageResultTest extends TestCase
         }
 
         self::assertSame($expected, $data['fecha_ingreso']);
+        // Enunciado: Fecha Estimada de Entrega = Fecha de Registro + 2 días, en hora de Lima.
+        self::assertSame(
+            (new \DateTimeImmutable($expected))->modify('+2 days')->format('Y-m-d\TH:i:sP'),
+            $data['fecha_estimada_entrega'],
+        );
         self::assertSame($original, $result->registeredAt);
         self::assertSame('AB23456789', $data['tracking_id']);
         self::assertSame('EN_ALMACEN', $data['estado']);
