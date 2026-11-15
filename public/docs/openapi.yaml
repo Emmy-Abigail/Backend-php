@@ -869,7 +869,9 @@ paths:
                 campos:
                   peso_kg: Debe estar entre 0.1 y 50 kg
         '503':
-          description: Tarifa ausente/invalida o fallo del servicio de asignacion; sin guardado parcial
+          description: >
+            Tarifa ausente o invalida (sin guardado parcial). Si Python no responde, el paquete se registra
+            igual con el respaldo FIFO de PHP y la respuesta 201 trae asignacion_respaldo: true.
           content:
             application/json:
               schema:
@@ -1345,6 +1347,8 @@ paths:
         Requiere rol OPERADOR y un lote de su sede en estado `EN_PREPARACION`.
 
         1. Lee el lote y pide a Python el orden de las paradas (vecino mas cercano desde la sede).
+           Si Python no responde (se reintenta una vez), el lote se despacha igual con las paradas en orden
+           de registro y la respuesta trae `ruta_optimizada: false`.
         2. En una sola transaccion bloquea el lote, sus paquetes y el conductor, y revalida todo.
         3. Guarda el conductor, el operador que despacha y la fecha; pasa el lote a `ASIGNADO` y sus paquetes a
            `ASIGNADO` con su numero de parada; registra un evento de historial por paquete; incrementa `version`.
@@ -1435,15 +1439,6 @@ paths:
               example:
                 message: El conductor no maneja el tipo de vehiculo del lote
                 error: referencia_invalida
-        '503':
-          description: El servicio de rutas (Python) no esta disponible. No se guarda nada.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                message: Servicio de rutas no disponible
-                error: ruta_no_disponible
 
   /api/v1/batches/{id}/assignment:
     patch:
@@ -2276,6 +2271,10 @@ components:
               type: string
             zona:
               type: string
+        asignacion_respaldo:
+          type: boolean
+          description: true si Python no respondio y el lote lo asigno el respaldo FIFO de PHP.
+          example: false
         correo_enviado:
           type: object
           description: >
@@ -2897,6 +2896,10 @@ components:
         version:
           type: integer
           example: 1
+        ruta_optimizada:
+          type: boolean
+          description: false si Python no respondio y las paradas quedaron en orden de registro.
+          example: true
         conductor:
           type: object
           properties:

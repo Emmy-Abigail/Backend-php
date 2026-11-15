@@ -58,6 +58,7 @@ final class DispatchBatchServiceTest extends TestCase
 
         self::assertSame(210, $result->batchId);
         self::assertSame(1, $result->version);
+        self::assertTrue($result->toArray()['ruta_optimizada']);
     }
 
     #[Test]
@@ -115,18 +116,24 @@ final class DispatchBatchServiceTest extends TestCase
     }
 
     #[Test]
-    public function si_python_no_responde_no_se_guarda_nada(): void
+    public function si_python_no_responde_despacha_en_orden_de_registro(): void
     {
+        $snapshot = $this->snapshot();
+        $command = $this->command();
+
         $repository = $this->createMock(BatchDispatchRepository::class);
-        $repository->method('snapshot')->willReturn($this->snapshot());
-        $repository->expects($this->never())->method('dispatch');
+        $repository->method('snapshot')->willReturn($snapshot);
+        $repository->expects($this->once())
+            ->method('dispatch')
+            ->with($command, $snapshot, [4990, 4991, 5003])
+            ->willReturn(BatchFixture::dispatchResult());
 
         $routes = $this->createStub(RouteOptimizerGateway::class);
         $routes->method('order')->willThrowException(new RouteUnavailable('Servicio de rutas no disponible'));
 
-        $this->expectException(RouteUnavailable::class);
+        $result = (new DispatchBatchService($repository, $routes))->execute($command);
 
-        (new DispatchBatchService($repository, $routes))->execute($this->command());
+        self::assertFalse($result->toArray()['ruta_optimizada']);
     }
 
     #[Test]

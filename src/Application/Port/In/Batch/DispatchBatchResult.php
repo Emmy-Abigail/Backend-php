@@ -21,7 +21,23 @@ final readonly class DispatchBatchResult
         public array $dispatchedBy,
         public DateTimeImmutable $dispatchedAt,
         public array $stops,
+        public bool $optimizedRoute = true,
     ) {
+    }
+
+    /** Mismo resultado, indicando que las paradas quedaron en orden de registro porque Python no respondió. */
+    public function withoutOptimizedRoute(): self
+    {
+        return new self(
+            $this->batchId,
+            $this->code,
+            $this->version,
+            $this->driver,
+            $this->dispatchedBy,
+            $this->dispatchedAt,
+            $this->stops,
+            false,
+        );
     }
 
     /** @return array<string, mixed> */
@@ -36,6 +52,7 @@ final readonly class DispatchBatchResult
             'despachado_por' => $this->dispatchedBy,
             'despachado_at' => LimaTime::format($this->dispatchedAt),
             'paradas' => $this->stops,
+            'ruta_optimizada' => $this->optimizedRoute,
         ];
     }
 }
