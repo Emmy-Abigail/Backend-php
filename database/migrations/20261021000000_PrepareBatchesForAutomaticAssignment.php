@@ -37,17 +37,18 @@ INNER JOIN usuarios u ON u.id = l.id_conductor
 SET l.id_tipo_vehiculo = u.id_tipo_vehiculo
 SQL);
 
+        // TiDB no permite modificar una columna y crear su clave foránea en el mismo ALTER:
+        // cada cambio va en su propia sentencia (en MySQL el resultado es el mismo).
+        $this->execute('ALTER TABLE lotes MODIFY COLUMN id_tipo_vehiculo TINYINT NOT NULL');
+        $this->execute('ALTER TABLE lotes ADD CONSTRAINT fk_lotes_tipo_vehiculo FOREIGN KEY (id_tipo_vehiculo) REFERENCES tipos_vehiculo(id)');
+        $this->execute('ALTER TABLE lotes ADD CONSTRAINT fk_lotes_despachado_por FOREIGN KEY (despachado_por) REFERENCES usuarios(id)');
         $this->execute(<<<'SQL'
-ALTER TABLE lotes
-    MODIFY COLUMN id_tipo_vehiculo TINYINT NOT NULL,
-    ADD CONSTRAINT fk_lotes_tipo_vehiculo FOREIGN KEY (id_tipo_vehiculo) REFERENCES tipos_vehiculo(id),
-    ADD CONSTRAINT fk_lotes_despachado_por FOREIGN KEY (despachado_por) REFERENCES usuarios(id),
-    ADD CONSTRAINT ck_lotes_estado_conductor CHECK (
-           (estado = 'EN_PREPARACION' AND id_conductor IS NULL)
-        OR (estado <> 'EN_PREPARACION' AND id_conductor IS NOT NULL)
-    ),
-    ADD INDEX idx_lotes_asignacion_automatica (id_sede, id_zona_destino, id_tipo_vehiculo, estado, created_at)
+ALTER TABLE lotes ADD CONSTRAINT ck_lotes_estado_conductor CHECK (
+       (estado = 'EN_PREPARACION' AND id_conductor IS NULL)
+    OR (estado <> 'EN_PREPARACION' AND id_conductor IS NOT NULL)
+)
 SQL);
+        $this->execute('ALTER TABLE lotes ADD INDEX idx_lotes_asignacion_automatica (id_sede, id_zona_destino, id_tipo_vehiculo, estado, created_at)');
     }
 
     public function down(): void
@@ -63,13 +64,13 @@ SQL);
             throw new RuntimeException('No se puede revertir: existen lotes en preparacion. Despachelos antes de volver al esquema anterior.');
         }
 
+        $this->execute('ALTER TABLE lotes DROP CHECK ck_lotes_estado_conductor');
+        $this->execute('ALTER TABLE lotes DROP FOREIGN KEY fk_lotes_conductor');
+        $this->execute('ALTER TABLE lotes DROP FOREIGN KEY fk_lotes_tipo_vehiculo');
+        $this->execute('ALTER TABLE lotes DROP FOREIGN KEY fk_lotes_despachado_por');
+        $this->execute('ALTER TABLE lotes DROP INDEX idx_lotes_asignacion_automatica');
         $this->execute(<<<'SQL'
 ALTER TABLE lotes
-    DROP CHECK ck_lotes_estado_conductor,
-    DROP FOREIGN KEY fk_lotes_conductor,
-    DROP FOREIGN KEY fk_lotes_tipo_vehiculo,
-    DROP FOREIGN KEY fk_lotes_despachado_por,
-    DROP INDEX idx_lotes_asignacion_automatica,
     DROP COLUMN id_tipo_vehiculo,
     DROP COLUMN version,
     DROP COLUMN despachado_por,

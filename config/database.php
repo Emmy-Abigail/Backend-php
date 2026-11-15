@@ -2,50 +2,44 @@
 
 declare(strict_types=1);
 
-use Dotenv\Dotenv;
+use Illuminate\Database\Capsule\Manager as Capsule;
 
-require_once __DIR__ . '/vendor/autoload.php';
+/**
+ * Configura Eloquent como ORM independiente de Laravel.
+ *
+ * @return Capsule
+ */
+return static function (): Capsule {
+    $capsule = new Capsule();
 
-$dotenv = Dotenv::createImmutable(__DIR__);
-// En la nube no hay archivo .env: las variables vienen del entorno del servicio.
-$dotenv->safeLoad();
-$dotenv->required([
-    'APP_ENV',
-    'DB_CONNECTION',
-    'DB_HOST',
-    'DB_PORT',
-    'DB_DATABASE',
-    'DB_USERNAME',
-    'DB_CHARSET',
-    'DB_COLLATION',
-])->notEmpty();
+    $options = [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_EMULATE_PREPARES => false,
+    ];
 
-$database = [
-    'adapter' => $_ENV['DB_CONNECTION'],
-    'host' => $_ENV['DB_HOST'],
-    'name' => $_ENV['DB_DATABASE'],
-    'user' => $_ENV['DB_USERNAME'],
-    'pass' => $_ENV['DB_PASSWORD'],
-    'port' => (int) $_ENV['DB_PORT'],
-    'charset' => $_ENV['DB_CHARSET'],
-    'collation' => $_ENV['DB_COLLATION'],
-];
+    // Bases gestionadas como TiDB Cloud exigen TLS; en local DB_SSL_CA no se define.
+    $sslCa = $_ENV['DB_SSL_CA'] ?? '';
+    if ($sslCa !== '') {
+        $options[PDO::MYSQL_ATTR_SSL_CA] = $sslCa;
+    }
 
-// TiDB Cloud y otras bases gestionadas exigen TLS; en local DB_SSL_CA no se define.
-if (($_ENV['DB_SSL_CA'] ?? '') !== '') {
-    $database['mysql_attr_ssl_ca'] = $_ENV['DB_SSL_CA'];
-}
+    $capsule->addConnection([
+        'driver' => $_ENV['DB_CONNECTION'],
+        'host' => $_ENV['DB_HOST'],
+        'port' => (int) $_ENV['DB_PORT'],
+        'database' => $_ENV['DB_DATABASE'],
+        'username' => $_ENV['DB_USERNAME'],
+        'password' => $_ENV['DB_PASSWORD'],
+        'charset' => $_ENV['DB_CHARSET'],
+        'collation' => $_ENV['DB_COLLATION'],
+        'prefix' => '',
+        'strict' => true,
+        'engine' => null,
+        'options' => $options,
+    ]);
 
-return [
-    'paths' => [
-        'migrations' => 'database/migrations',
-        'seeds' => 'database/seeds',
-    ],
-    'environments' => [
-        'default_migration_table' => 'phinxlog',
-        'default_environment' => $_ENV['APP_ENV'],
-        'development' => $database,
-        'production' => $database,
-    ],
-    'version_order' => 'creation',
-];
+    $capsule->setAsGlobal();
+    $capsule->bootEloquent();
+
+    return $capsule;
+};

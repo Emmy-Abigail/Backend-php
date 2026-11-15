@@ -8,28 +8,25 @@ final class AddContactAndCoordinatesToPackages extends AbstractMigration
 {
     public function up(): void
     {
+        // TiDB no permite varios cambios relacionados en un mismo ALTER (por ejemplo,
+        // crear destino_lng "AFTER destino_lat" junto con destino_lat): una sentencia por cambio.
+
         // Correo opcional: los clientes y paquetes registrados antes no lo tienen.
         $this->execute('ALTER TABLE clientes ADD COLUMN correo VARCHAR(150) NULL AFTER celular');
+        $this->execute('ALTER TABLE paquetes ADD COLUMN destinatario_correo VARCHAR(150) NULL AFTER destinatario_celular');
 
         // Punto exacto elegido en el mapa. Si falta, la ruta usa el centroide del distrito.
-        $this->execute(<<<'SQL'
-ALTER TABLE paquetes
-    ADD COLUMN destinatario_correo VARCHAR(150) NULL AFTER destinatario_celular,
-    ADD COLUMN destino_lat DECIMAL(9,6) NULL AFTER referencia,
-    ADD COLUMN destino_lng DECIMAL(9,6) NULL AFTER destino_lat,
-    ADD CONSTRAINT ck_paquetes_coordenadas CHECK ((destino_lat IS NULL) = (destino_lng IS NULL))
-SQL);
+        $this->execute('ALTER TABLE paquetes ADD COLUMN destino_lat DECIMAL(9,6) NULL AFTER referencia');
+        $this->execute('ALTER TABLE paquetes ADD COLUMN destino_lng DECIMAL(9,6) NULL AFTER destino_lat');
+        $this->execute('ALTER TABLE paquetes ADD CONSTRAINT ck_paquetes_coordenadas CHECK ((destino_lat IS NULL) = (destino_lng IS NULL))');
     }
 
     public function down(): void
     {
-        $this->execute(<<<'SQL'
-ALTER TABLE paquetes
-    DROP CHECK ck_paquetes_coordenadas,
-    DROP COLUMN destino_lng,
-    DROP COLUMN destino_lat,
-    DROP COLUMN destinatario_correo
-SQL);
+        $this->execute('ALTER TABLE paquetes DROP CHECK ck_paquetes_coordenadas');
+        $this->execute('ALTER TABLE paquetes DROP COLUMN destino_lng');
+        $this->execute('ALTER TABLE paquetes DROP COLUMN destino_lat');
+        $this->execute('ALTER TABLE paquetes DROP COLUMN destinatario_correo');
         $this->execute('ALTER TABLE clientes DROP COLUMN correo');
     }
 }
