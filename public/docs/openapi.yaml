@@ -14,9 +14,6 @@ info:
       "error": "codigo_error_en_snake_case"
     }
     ```
-
-    ## Rutas Pendientes
-    Las rutas marcadas como **Pendiente** responden con cÃ³digo `501 Endpoint aÃºn no implementado`.
 servers:
   - url: /
     description: Servidor actual
@@ -26,16 +23,12 @@ tags:
   - name: Usuarios
   - name: CatÃ¡logos
   - name: Cotizaciones
-  - name: Paquetes (prÃ³ximamente)
+  - name: Paquetes
   - name: Lotes
   - name: Conductor
   - name: Entregas
-  - name: Lotes (prÃ³ximamente)
-  - name: Conductor (prÃ³ximamente)
-  - name: Entregas (prÃ³ximamente)
-  - name: Seguimiento (prÃ³ximamente)
+  - name: Seguimiento
   - name: Dashboard
-  - name: Zonas (prÃ³ximamente)
 
 paths:
   /health:
@@ -699,7 +692,7 @@ paths:
 
   /api/v1/packages:
     get:
-      tags: [Paquetes (prÃ³ximamente)]
+      tags: [Paquetes]
       summary: Listar paquetes de la sede del operador
       operationId: listPackages
       description: |
@@ -820,7 +813,7 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationError'
     post:
-      tags: [Paquetes (prÃ³ximamente)]
+      tags: [Paquetes]
       summary: Registrar paquete con asignacion automatica de lote
       operationId: registerPackage
       description: |
@@ -888,7 +881,7 @@ paths:
 
   /api/v1/packages/{id}:
     get:
-      tags: [Paquetes (prÃ³ximamente)]
+      tags: [Paquetes]
       summary: Consultar el detalle e historial de un paquete
       operationId: getPackage
       description: |
@@ -1118,7 +1111,7 @@ paths:
 
   /api/v1/packages/{id}/retry:
     post:
-      tags: [Paquetes (prÃ³ximamente)]
+      tags: [Paquetes]
       summary: Crear el reintento de un paquete FALLIDO
       operationId: retryPackage
       description: |
@@ -1223,16 +1216,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
 
-  /api/v1/packages/{id}/history:
-    get:
-      tags: [Paquetes (prÃ³ximamente)]
-      summary: '[Pendiente] Historial del paquete'
-      parameters:
-        - $ref: '#/components/parameters/PackageId'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
-
   /api/v1/batches:
     get:
       tags: [Lotes]
@@ -1290,12 +1273,6 @@ paths:
               example:
                 message: El filtro estado debe ser EN_PREPARACION, ASIGNADO, EN_RUTA o CERRADO
                 error: filtro_invalido
-    post:
-      tags: [Lotes (prÃ³ximamente)]
-      summary: '[Pendiente] Crear lote'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
 
   /api/v1/batches/{id}:
     get:
@@ -1454,32 +1431,6 @@ paths:
               example:
                 message: El conductor no maneja el tipo de vehiculo del lote
                 error: referencia_invalida
-
-  /api/v1/batches/{id}/assignment:
-    patch:
-      tags: [Lotes (prÃ³ximamente)]
-      summary: '[Pendiente] Asignar lote'
-      parameters:
-        - $ref: '#/components/parameters/BatchId'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
-
-  /api/v1/me/batches:
-    get:
-      tags: [Conductor (prÃ³ximamente)]
-      summary: '[Pendiente] Consultar lotes del conductor'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
-
-  /api/v1/me/packages:
-    get:
-      tags: [Conductor (prÃ³ximamente)]
-      summary: '[Pendiente] Consultar paquetes del conductor'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
 
   /api/v1/batches/{id}/start-route:
     post:
@@ -1823,26 +1774,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/v1/packages/{id}/deliver:
-    post:
-      tags: [Entregas (prÃ³ximamente)]
-      summary: '[Pendiente] Registrar entrega de un paquete'
-      parameters:
-        - $ref: '#/components/parameters/PackageId'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
-
-  /api/v1/packages/{id}/fail:
-    post:
-      tags: [Entregas (prÃ³ximamente)]
-      summary: '[Pendiente] Registrar entrega fallida'
-      parameters:
-        - $ref: '#/components/parameters/PackageId'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
-
   /api/v1/tracking/{trackingId}:
     get:
       tags: [Seguimiento]
@@ -2071,20 +2002,6 @@ paths:
         '422':
           $ref: '#/components/responses/DashboardInvalidParams'
 
-  /api/v1/zones:
-    get:
-      tags: [Zonas (prÃ³ximamente)]
-      summary: '[Pendiente] Listar zonas'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
-    post:
-      tags: [Zonas (prÃ³ximamente)]
-      summary: '[Pendiente] Crear zona'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
-
 components:
   securitySchemes:
     bearerAuth:
@@ -2164,14 +2081,6 @@ components:
             message: El rango de fechas no es valido
             campos:
               desde: La fecha "desde" no puede ser posterior a "hasta"
-    NotImplemented:
-      description: Endpoint registrado, pero su funcionalidad aÃºn no estÃ¡ implementada
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/MessageResponse'
-          example:
-            message: Endpoint aÃºn no implementado
     BadRequest:
       description: Solicitud invÃ¡lida
       content:

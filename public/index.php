@@ -357,15 +357,6 @@ $registerDashboardRoutes(
     $mustChangePasswordMiddleware,
 );
 
-$routeFiles = [
-    __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/ZoneRoutes.php',
-];
-
-foreach ($routeFiles as $routeFile) {
-    $registerRoutes = require $routeFile;
-    $registerRoutes($app);
-}
-
 // Manejador global de errores (JSON renderer para 404, 405 y 500)
 $isDevelopment = ($_ENV['APP_ENV'] ?? 'production') === 'development';
 $errorMiddleware = $app->addErrorMiddleware($isDevelopment, true, true);

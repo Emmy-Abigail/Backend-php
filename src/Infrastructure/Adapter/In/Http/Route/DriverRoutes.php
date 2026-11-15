@@ -6,8 +6,6 @@ use App\Infrastructure\Adapter\In\Http\Action\Batch\StartRouteAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\MustChangePasswordMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
-use Psr\Http\Message\ResponseInterface;
-use Psr\Http\Message\ServerRequestInterface;
 use Slim\App;
 
 return static function (
@@ -17,14 +15,7 @@ return static function (
     RoleMiddleware $driverRoleMiddleware,
     MustChangePasswordMiddleware $mustChangePasswordMiddleware,
 ): void {
-    $notImplemented = static function (ServerRequestInterface $request, ResponseInterface $response): ResponseInterface {
-        $response->getBody()->write(json_encode(['message' => 'Endpoint aún no implementado']));
-
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(501);
-    };
-
-    $app->get('/api/v1/me/batches', $notImplemented);
-    $app->get('/api/v1/me/packages', $notImplemented);
+    // Los lotes y paquetes del conductor se consultan con GET /batches y GET /packages/{id}.
     $app->post('/api/v1/batches/{id}/start-route', $startRouteAction)
         ->add($driverRoleMiddleware)
         ->add($mustChangePasswordMiddleware)

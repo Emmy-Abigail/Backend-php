@@ -115,14 +115,6 @@ final class PackageRoutesTest extends TestCase
         self::assertSame(20, $body['lote']['id']);
     }
 
-    public function test_other_package_endpoints_remain_unimplemented(): void
-    {
-        $app = $this->app($this->createStub(RegisterPackageUseCase::class));
-        foreach (['/api/v1/packages/1/history'] as $path) {
-            self::assertSame(501, $app->handle((new ServerRequestFactory())->createServerRequest('GET', $path))->getStatusCode());
-        }
-    }
-
     private function listRequest(string $query = '', bool $token = true): \Psr\Http\Message\ServerRequestInterface
     {
         parse_str($query, $params);
