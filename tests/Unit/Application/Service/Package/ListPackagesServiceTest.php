@@ -46,8 +46,40 @@ final class ListPackagesServiceTest extends TestCase
     {
         return [
             'conductor' => ['CONDUCTOR', 1],
-            'administrador' => ['ADMINISTRADOR', null],
             'operador sin sede' => ['OPERADOR', null],
         ];
+    }
+
+    public function test_el_administrador_ve_todas_las_sedes_sin_filtro(): void
+    {
+        $admin = new AuthenticatedUser(1, 'Admin', 'admin@example.invalid', 'ADMINISTRADOR');
+        $repository = $this->createMock(PackageQueryRepository::class);
+        $repository->expects($this->once())->method('searchBySede')
+            ->with(null, null, null, null, null, 1, 20)
+            ->willReturn(new ListPackagesResult([], 0, 1, 20));
+
+        (new ListPackagesService($repository))->execute(new ListPackagesQuery($admin));
+    }
+
+    public function test_el_administrador_puede_filtrar_una_sede(): void
+    {
+        $admin = new AuthenticatedUser(1, 'Admin', 'admin@example.invalid', 'ADMINISTRADOR');
+        $repository = $this->createMock(PackageQueryRepository::class);
+        $repository->expects($this->once())->method('searchBySede')
+            ->with(3, null, null, null, null, 1, 20)
+            ->willReturn(new ListPackagesResult([], 0, 1, 20));
+
+        (new ListPackagesService($repository))->execute(new ListPackagesQuery($admin, sedeId: 3));
+    }
+
+    public function test_el_operador_no_puede_pedir_otra_sede(): void
+    {
+        $operator = new AuthenticatedUser(2, 'Ana', 'ana@example.invalid', 'OPERADOR', false, 4);
+        $repository = $this->createMock(PackageQueryRepository::class);
+        $repository->expects($this->once())->method('searchBySede')
+            ->with(4, null, null, null, null, 1, 20)
+            ->willReturn(new ListPackagesResult([], 0, 1, 20));
+
+        (new ListPackagesService($repository))->execute(new ListPackagesQuery($operator, sedeId: 9));
     }
 }

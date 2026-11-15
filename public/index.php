@@ -269,8 +269,8 @@ $registerPackageRoutes(
     $jwtAuthMiddleware,
     new RoleMiddleware('OPERADOR'),
     $mustChangePasswordMiddleware,
-    new RoleMiddleware('OPERADOR', 'CONDUCTOR'),
     $retryPackageAction,
+    new RoleMiddleware('OPERADOR', 'CONDUCTOR', 'ADMINISTRADOR'),
 );
 
 // Lotes: consulta (Operador y Conductor) y despacho (Operador). El orden de las paradas lo calcula Python.
@@ -356,15 +356,6 @@ $registerDashboardRoutes(
     new RoleMiddleware('ADMINISTRADOR', 'OPERADOR'),
     $mustChangePasswordMiddleware,
 );
-
-$routeFiles = [
-    __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/ZoneRoutes.php',
-];
-
-foreach ($routeFiles as $routeFile) {
-    $registerRoutes = require $routeFile;
-    $registerRoutes($app);
-}
 
 // Manejador global de errores (JSON renderer para 404, 405 y 500)
 $isDevelopment = ($_ENV['APP_ENV'] ?? 'production') === 'development';

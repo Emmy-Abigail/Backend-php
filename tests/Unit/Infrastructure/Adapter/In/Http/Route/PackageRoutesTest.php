@@ -47,7 +47,7 @@ final class PackageRoutesTest extends TestCase
         $auth->method('execute')->willReturn(new AuthenticatedUser(2, 'Operator', 'operator@example.invalid', $role, $mustChange, 1));
         $app = AppFactory::create();
         $register = require __DIR__ . '/../../../../../../../src/Infrastructure/Adapter/In/Http/Route/PackageRoutes.php';
-        $register($app, new RegisterPackageAction($useCase), new ListPackagesAction($listUseCase ?? $this->createStub(ListPackagesUseCase::class)), new GetPackageAction($getUseCase ?? $this->createStub(GetPackageUseCase::class)), new JwtAuthMiddleware($auth), new RoleMiddleware('OPERADOR'), new MustChangePasswordMiddleware(), new RoleMiddleware('OPERADOR', 'CONDUCTOR'), new RetryPackageAction($retryUseCase ?? $this->createStub(RetryPackageUseCase::class)));
+        $register($app, new RegisterPackageAction($useCase), new ListPackagesAction($listUseCase ?? $this->createStub(ListPackagesUseCase::class)), new GetPackageAction($getUseCase ?? $this->createStub(GetPackageUseCase::class)), new JwtAuthMiddleware($auth), new RoleMiddleware('OPERADOR'), new MustChangePasswordMiddleware(), new RetryPackageAction($retryUseCase ?? $this->createStub(RetryPackageUseCase::class)), new RoleMiddleware('OPERADOR', 'CONDUCTOR', 'ADMINISTRADOR'));
 
         return $app;
     }
@@ -115,14 +115,6 @@ final class PackageRoutesTest extends TestCase
         self::assertSame(20, $body['lote']['id']);
     }
 
-    public function test_other_package_endpoints_remain_unimplemented(): void
-    {
-        $app = $this->app($this->createStub(RegisterPackageUseCase::class));
-        foreach (['/api/v1/packages/1/history'] as $path) {
-            self::assertSame(501, $app->handle((new ServerRequestFactory())->createServerRequest('GET', $path))->getStatusCode());
-        }
-    }
-
     private function listRequest(string $query = '', bool $token = true): \Psr\Http\Message\ServerRequestInterface
     {
         parse_str($query, $params);
@@ -131,13 +123,42 @@ final class PackageRoutesTest extends TestCase
         return $token ? $request->withHeader('Authorization', 'Bearer test-token') : $request;
     }
 
-    #[DataProvider('unauthorizedUsers')]
+    #[DataProvider('listBlockedUsers')]
     public function test_list_blocks_unauthorized_requests_before_the_use_case(string $role, bool $mustChange, bool $token, int $expected): void
     {
         $listUseCase = $this->createMock(ListPackagesUseCase::class);
         $listUseCase->expects($this->never())->method('execute');
         $app = $this->app($this->createStub(RegisterPackageUseCase::class), $role, $mustChange, $listUseCase);
         self::assertSame($expected, $app->handle($this->listRequest(token: $token))->getStatusCode());
+    }
+
+    public static function listBlockedUsers(): array
+    {
+        // El conductor y el administrador pasan el middleware; el servicio decide si pueden listar.
+        return [['OPERADOR', false, false, 401], ['OPERADOR', true, true, 403], ['ADMINISTRADOR', true, true, 403]];
+    }
+
+    public function test_list_passes_the_admin_sede_filter_to_the_use_case(): void
+    {
+        $listUseCase = $this->createMock(ListPackagesUseCase::class);
+        $listUseCase->expects($this->once())->method('execute')
+            ->with($this->callback(static fn (ListPackagesQuery $q): bool => $q->sedeId === 3 && $q->operator->role === 'ADMINISTRADOR'))
+            ->willReturn(new ListPackagesResult([], 0, 1, 20));
+        $app = $this->app($this->createStub(RegisterPackageUseCase::class), 'ADMINISTRADOR', false, $listUseCase);
+
+        self::assertSame(200, $app->handle($this->listRequest('id_sede=3'))->getStatusCode());
+    }
+
+    public function test_list_rejects_an_invalid_sede_filter(): void
+    {
+        $listUseCase = $this->createMock(ListPackagesUseCase::class);
+        $listUseCase->expects($this->never())->method('execute');
+        $app = $this->app($this->createStub(RegisterPackageUseCase::class), 'ADMINISTRADOR', false, $listUseCase);
+
+        $response = $app->handle($this->listRequest('id_sede=0'));
+
+        self::assertSame(422, $response->getStatusCode());
+        self::assertArrayHasKey('id_sede', json_decode((string) $response->getBody(), true)['campos']);
     }
 
     public function test_list_uses_the_operator_sede_and_returns_data_with_pagination(): void
@@ -244,7 +265,7 @@ final class PackageRoutesTest extends TestCase
 
     public static function detailAccess(): array
     {
-        return [['OPERADOR', false, false, 401], ['ADMINISTRADOR', false, true, 403], ['CONDUCTOR', true, true, 403]];
+        return [['OPERADOR', false, false, 401], ['CONDUCTOR', true, true, 403]];
     }
 
     #[DataProvider('detailViewers')]
@@ -264,7 +285,7 @@ final class PackageRoutesTest extends TestCase
 
     public static function detailViewers(): array
     {
-        return [['OPERADOR'], ['CONDUCTOR']];
+        return [['OPERADOR'], ['CONDUCTOR'], ['ADMINISTRADOR']];
     }
 
     #[DataProvider('invalidIds')]

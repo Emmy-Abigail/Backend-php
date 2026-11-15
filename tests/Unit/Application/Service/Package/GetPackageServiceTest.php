@@ -90,6 +90,17 @@ final class GetPackageServiceTest extends TestCase
         self::assertArrayNotHasKey('reintentos_restantes', $result);
     }
 
+    public function test_el_administrador_ve_el_detalle_completo_de_cualquier_sede(): void
+    {
+        $admin = new AuthenticatedUser(1, 'Admin', 'admin@example.invalid', 'ADMINISTRADOR');
+
+        $result = $this->service($this->detail(sedeId: 3))->execute(new GetPackageQuery($admin, 10))->toArray();
+
+        self::assertSame('AB23456789', $result['tracking_id']);
+        self::assertSame('Remitente', $result['remitente']['nombres']);
+        self::assertSame(self::HISTORY, $result['historial']);
+    }
+
     public function test_el_operador_de_otra_sede_no_puede_verlo(): void
     {
         $this->expectException(PackageAccessDenied::class);
@@ -183,7 +194,6 @@ final class GetPackageServiceTest extends TestCase
     public static function usuariosSinPermiso(): array
     {
         return [
-            'administrador' => [new AuthenticatedUser(1, 'Admin', 'admin@example.invalid', 'ADMINISTRADOR')],
             'operador sin sede' => [new AuthenticatedUser(2, 'Ana', 'ana@example.invalid', 'OPERADOR', false, null)],
         ];
     }

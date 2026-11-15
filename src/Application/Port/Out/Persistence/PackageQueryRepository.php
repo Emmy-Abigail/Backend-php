@@ -8,8 +8,9 @@ use App\Application\Port\In\Package\ListPackagesResult;
 
 interface PackageQueryRepository
 {
+    /** @param int|null $sedeId null = todas las sedes (solo para el administrador). */
     public function searchBySede(
-        int $sedeId,
+        ?int $sedeId,
         ?string $search,
         ?string $status,
         ?string $from,

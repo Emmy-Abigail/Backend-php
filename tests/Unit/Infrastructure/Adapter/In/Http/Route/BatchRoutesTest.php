@@ -135,15 +135,6 @@ final class BatchRoutesTest extends TestCase
         }
     }
 
-    #[Test]
-    public function las_rutas_obsoletas_siguen_sin_implementar(): void
-    {
-        $app = $this->appForRole('OPERADOR');
-
-        self::assertSame(501, $this->handle($app, $this->request('POST', '/api/v1/batches', false))->getStatusCode());
-        self::assertSame(501, $this->handle($app, $this->request('PATCH', '/api/v1/batches/210/assignment', false))->getStatusCode());
-    }
-
     private function appForRole(string $role, bool $mustChangePassword = false): App
     {
         $list = $this->createStub(ListBatchesUseCase::class);

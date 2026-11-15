@@ -9,8 +9,6 @@ use App\Infrastructure\Adapter\In\Http\Action\Package\RetryPackageAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\MustChangePasswordMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
-use Psr\Http\Message\ResponseInterface;
-use Psr\Http\Message\ServerRequestInterface;
 use Slim\App;
 
 return static function (
@@ -21,30 +19,26 @@ return static function (
     JwtAuthMiddleware $jwtAuthMiddleware,
     RoleMiddleware $operatorRoleMiddleware,
     MustChangePasswordMiddleware $mustChangePasswordMiddleware,
-    RoleMiddleware $operatorOrDriverRoleMiddleware,
     RetryPackageAction $retryPackageAction,
+    RoleMiddleware $readerRoleMiddleware,
 ): void {
-    $notImplemented = static function (ServerRequestInterface $request, ResponseInterface $response): ResponseInterface {
-        $response->getBody()->write(json_encode(['message' => 'Endpoint aún no implementado']));
-
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(501);
-    };
-
+    // El historial del paquete viene dentro de GET /packages/{id}.
     $app->post('/api/v1/packages', $registerPackageAction)
         ->add($operatorRoleMiddleware)
         ->add($mustChangePasswordMiddleware)
         ->add($jwtAuthMiddleware);
+    // Consulta: el middleware deja pasar a los tres roles y el servicio aplica los permisos finos
+    // (el conductor no lista, el operador solo ve su sede, el administrador ve todas).
     $app->get('/api/v1/packages', $listPackagesAction)
-        ->add($operatorRoleMiddleware)
+        ->add($readerRoleMiddleware)
         ->add($mustChangePasswordMiddleware)
         ->add($jwtAuthMiddleware);
     $app->get('/api/v1/packages/{id}', $getPackageAction)
-        ->add($operatorOrDriverRoleMiddleware)
+        ->add($readerRoleMiddleware)
         ->add($mustChangePasswordMiddleware)
         ->add($jwtAuthMiddleware);
     $app->post('/api/v1/packages/{id}/retry', $retryPackageAction)
         ->add($operatorRoleMiddleware)
         ->add($mustChangePasswordMiddleware)
         ->add($jwtAuthMiddleware);
-    $app->get('/api/v1/packages/{id}/history', $notImplemented);
 };

@@ -30,8 +30,11 @@ final readonly class GetPackageService implements GetPackageUseCase
     {
         $viewer = $query->viewer;
         $isOperator = $viewer->role === 'OPERADOR' && $viewer->idSede !== null;
-        if (!$isOperator && $viewer->role !== 'CONDUCTOR') {
-            throw new UserNotAllowed('Solo un operador con sede o un conductor puede consultar paquetes');
+        // El administrador supervisa todas las sedes (por ejemplo, desde los fallidos del dashboard).
+        // Solo consulta: la reasignación sigue siendo del operador de la sede.
+        $isAdmin = $viewer->role === 'ADMINISTRADOR';
+        if (!$isOperator && !$isAdmin && $viewer->role !== 'CONDUCTOR') {
+            throw new UserNotAllowed('Solo un operador con sede, un administrador o un conductor puede consultar paquetes');
         }
 
         $detail = $this->repository->findDetail($query->packageId);
@@ -39,8 +42,8 @@ final readonly class GetPackageService implements GetPackageUseCase
             throw new PackageNotFound('El paquete no existe');
         }
 
-        if ($isOperator) {
-            if ($detail->sedeId !== $viewer->idSede) {
+        if ($isOperator || $isAdmin) {
+            if ($isOperator && $detail->sedeId !== $viewer->idSede) {
                 throw new PackageAccessDenied('No puede ver paquetes de otra sede');
             }
 

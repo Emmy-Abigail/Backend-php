@@ -72,6 +72,7 @@ final class RegisterPackageServiceTest extends TestCase
         $result = (new RegisterPackageService($repository, new FixedPackagePricing(), $assignment, $tracking))->execute(PackageFixture::command());
         self::assertSame('EN_ALMACEN', $result->toArray()['estado']);
         self::assertSame(15.5, $result->toArray()['cotizacion']['monto']);
+        self::assertFalse($result->toArray()['asignacion_respaldo']);
     }
 
     public function test_refreshes_the_snapshot_and_tracking_after_a_concurrent_change(): void
@@ -125,16 +126,52 @@ final class RegisterPackageServiceTest extends TestCase
         (new RegisterPackageService($repository, $pricing, $this->createStub(BatchAssignmentGateway::class), $this->createStub(TrackingGenerator::class)))->execute(PackageFixture::command());
     }
 
-    public function test_rejects_a_recommendation_for_a_larger_vehicle_without_writing(): void
+    public function test_invalid_recommendation_uses_the_php_fifo_fallback(): void
     {
         $repository = $this->createMock(PackageRegistrationRepository::class);
         $repository->method('contextFor')->willReturn(PackageFixture::context());
         $repository->method('snapshot')->willReturn(PackageFixture::snapshot());
-        $repository->expects($this->never())->method('register');
+        $repository->expects($this->once())->method('register')->willReturnCallback(
+            static function ($command, $snapshot, $decision, $quote, $tracking): RegisterPackageResult {
+                self::assertSame('CREAR_LOTE', $decision->action);
+                self::assertSame(1, $decision->vehicleId);
+                return new RegisterPackageResult(10, $tracking, '2026-10-21T12:00:00+00:00', $quote, ['id' => 20]);
+            },
+        );
         $assignment = $this->createStub(BatchAssignmentGateway::class);
         $assignment->method('evaluate')->willReturn(new BatchAssignment('CREAR_LOTE', 2, null));
-        $this->expectException(AssignmentUnavailable::class);
-        (new RegisterPackageService($repository, new FixedPackagePricing(), $assignment, $this->createStub(TrackingGenerator::class)))->execute(PackageFixture::command());
+        $tracking = $this->createStub(TrackingGenerator::class);
+        $tracking->method('generate')->willReturn('AB23456789');
+
+        $result = (new RegisterPackageService($repository, new FixedPackagePricing(), $assignment, $tracking))->execute(PackageFixture::command());
+
+        self::assertTrue($result->toArray()['asignacion_respaldo']);
+    }
+
+    public function test_python_down_registers_in_the_oldest_batch_with_capacity(): void
+    {
+        $snapshot = PackageFixture::snapshot([
+            ['id' => 102, 'id_tipo_vehiculo' => 1, 'cantidad_paquetes' => 1, 'peso_total_kg' => '2.00', 'created_at' => '2026-10-21T09:00:00+00:00'],
+            ['id' => 101, 'id_tipo_vehiculo' => 1, 'cantidad_paquetes' => 2, 'peso_total_kg' => '5.00', 'created_at' => '2026-10-21T08:00:00+00:00'],
+        ]);
+        $repository = $this->createMock(PackageRegistrationRepository::class);
+        $repository->method('contextFor')->willReturn($snapshot->context);
+        $repository->method('snapshot')->willReturn($snapshot);
+        $repository->expects($this->once())->method('register')->willReturnCallback(
+            static function ($command, $received, $decision, $quote, $tracking): RegisterPackageResult {
+                self::assertSame('USAR_LOTE', $decision->action);
+                self::assertSame(101, $decision->batchId);
+                return new RegisterPackageResult(10, $tracking, '2026-10-21T12:00:00+00:00', $quote, ['id' => 101]);
+            },
+        );
+        $assignment = $this->createStub(BatchAssignmentGateway::class);
+        $assignment->method('evaluate')->willThrowException(new AssignmentUnavailable('Servicio de asignacion no disponible'));
+        $tracking = $this->createStub(TrackingGenerator::class);
+        $tracking->method('generate')->willReturn('AB23456789');
+
+        $result = (new RegisterPackageService($repository, new FixedPackagePricing(), $assignment, $tracking))->execute(PackageFixture::command());
+
+        self::assertTrue($result->toArray()['asignacion_respaldo']);
     }
 
     /** Registro que siempre se guarda, para probar solo el envío del código. */

@@ -14,9 +14,6 @@ info:
       "error": "codigo_error_en_snake_case"
     }
     ```
-
-    ## Rutas Pendientes
-    Las rutas marcadas como **Pendiente** responden con cÃ³digo `501 Endpoint aÃºn no implementado`.
 servers:
   - url: /
     description: Servidor actual
@@ -26,16 +23,12 @@ tags:
   - name: Usuarios
   - name: CatÃ¡logos
   - name: Cotizaciones
-  - name: Paquetes (prÃ³ximamente)
+  - name: Paquetes
   - name: Lotes
   - name: Conductor
   - name: Entregas
-  - name: Lotes (prÃ³ximamente)
-  - name: Conductor (prÃ³ximamente)
-  - name: Entregas (prÃ³ximamente)
-  - name: Seguimiento (prÃ³ximamente)
+  - name: Seguimiento
   - name: Dashboard
-  - name: Zonas (prÃ³ximamente)
 
 paths:
   /health:
@@ -699,12 +692,13 @@ paths:
 
   /api/v1/packages:
     get:
-      tags: [Paquetes (prÃ³ximamente)]
-      summary: Listar paquetes de la sede del operador
+      tags: [Paquetes]
+      summary: Listar paquetes (operador su sede, administrador todas)
       operationId: listPackages
       description: |
-        Solo OPERADOR con sede y cambio inicial de password completado.
-        La sede sale de la sesion; no se acepta como parametro.
+        OPERADOR con sede o ADMINISTRADOR, con el cambio inicial de password completado.
+        OPERADOR: siempre su sede, que sale de la sesion; id_sede se ignora.
+        ADMINISTRADOR: todas las sedes, o una sola con id_sede. Cada paquete indica su id_sede.
         Ordena del ingreso mas reciente al mas antiguo.
         Los filtros de fecha representan dias completos de America/Lima; la BD guarda UTC.
         Las fechas de respuesta se devuelven en ISO 8601 con offset -05:00.
@@ -712,6 +706,13 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - name: id_sede
+          in: query
+          required: false
+          description: Solo ADMINISTRADOR. Sin el parametro, todas las sedes. Entero mayor o igual a 1.
+          schema:
+            type: integer
+            minimum: 1
         - name: q
           in: query
           description: Busca por inicio de tracking o DNI del destinatario, o por parte de su nombre. Maximo 100 caracteres.
@@ -766,6 +767,9 @@ paths:
                           type: integer
                         tracking_id:
                           type: string
+                        id_sede:
+                          type: integer
+                          description: Sede del paquete (util para el administrador, que ve varias sedes).
                         destinatario:
                           type: object
                           properties:
@@ -820,7 +824,7 @@ paths:
         '422':
           $ref: '#/components/responses/ValidationError'
     post:
-      tags: [Paquetes (prÃ³ximamente)]
+      tags: [Paquetes]
       summary: Registrar paquete con asignacion automatica de lote
       operationId: registerPackage
       description: |
@@ -869,7 +873,9 @@ paths:
                 campos:
                   peso_kg: Debe estar entre 0.1 y 50 kg
         '503':
-          description: Tarifa ausente/invalida o fallo del servicio de asignacion; sin guardado parcial
+          description: >
+            Tarifa ausente o invalida (sin guardado parcial). Si Python no responde, el paquete se registra
+            igual con el respaldo FIFO de PHP y la respuesta 201 trae asignacion_respaldo: true.
           content:
             application/json:
               schema:
@@ -886,14 +892,16 @@ paths:
 
   /api/v1/packages/{id}:
     get:
-      tags: [Paquetes (prÃ³ximamente)]
+      tags: [Paquetes]
       summary: Consultar el detalle e historial de un paquete
       operationId: getPackage
       description: |
         OPERADOR: solo paquetes de su sede; ve el detalle completo.
+        ADMINISTRADOR: paquetes de cualquier sede, con el mismo detalle que el operador (solo consulta:
+        reasignar sigue siendo del operador). Lo usa, por ejemplo, el enlace desde los fallidos del dashboard.
         CONDUCTOR: solo paquetes de un lote asignado a el en estado ASIGNADO o EN_RUTA;
         no recibe remitente ni costo_estimado.
-        Ambos deben haber completado el cambio inicial de password.
+        Todos deben haber completado el cambio inicial de password.
         El historial va del cambio mas antiguo al mas reciente y no expone la ubicacion de la evidencia.
         Incluye vehiculo (id, codigo y nombre) tomado del lote, incluso antes de asignar conductor.
         Si un paquete no tiene lote, vehiculo es null. Las fechas usan ISO 8601 con offset -05:00.
@@ -1116,7 +1124,7 @@ paths:
 
   /api/v1/packages/{id}/retry:
     post:
-      tags: [Paquetes (prÃ³ximamente)]
+      tags: [Paquetes]
       summary: Crear el reintento de un paquete FALLIDO
       operationId: retryPackage
       description: |
@@ -1221,16 +1229,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/MessageResponse'
 
-  /api/v1/packages/{id}/history:
-    get:
-      tags: [Paquetes (prÃ³ximamente)]
-      summary: '[Pendiente] Historial del paquete'
-      parameters:
-        - $ref: '#/components/parameters/PackageId'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
-
   /api/v1/batches:
     get:
       tags: [Lotes]
@@ -1288,12 +1286,6 @@ paths:
               example:
                 message: El filtro estado debe ser EN_PREPARACION, ASIGNADO, EN_RUTA o CERRADO
                 error: filtro_invalido
-    post:
-      tags: [Lotes (prÃ³ximamente)]
-      summary: '[Pendiente] Crear lote'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
 
   /api/v1/batches/{id}:
     get:
@@ -1360,6 +1352,8 @@ paths:
         Requiere rol OPERADOR y un lote de su sede en estado `EN_PREPARACION`.
 
         1. Lee el lote y pide a Python el orden de las paradas (vecino mas cercano desde la sede).
+           Si Python no responde (se reintenta una vez), el lote se despacha igual con las paradas en orden
+           de registro y la respuesta trae `ruta_optimizada: false`.
         2. En una sola transaccion bloquea el lote, sus paquetes y el conductor, y revalida todo.
         3. Guarda el conductor, el operador que despacha y la fecha; pasa el lote a `ASIGNADO` y sus paquetes a
            `ASIGNADO` con su numero de parada; registra un evento de historial por paquete; incrementa `version`.
@@ -1450,41 +1444,6 @@ paths:
               example:
                 message: El conductor no maneja el tipo de vehiculo del lote
                 error: referencia_invalida
-        '503':
-          description: El servicio de rutas (Python) no esta disponible. No se guarda nada.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              example:
-                message: Servicio de rutas no disponible
-                error: ruta_no_disponible
-
-  /api/v1/batches/{id}/assignment:
-    patch:
-      tags: [Lotes (prÃ³ximamente)]
-      summary: '[Pendiente] Asignar lote'
-      parameters:
-        - $ref: '#/components/parameters/BatchId'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
-
-  /api/v1/me/batches:
-    get:
-      tags: [Conductor (prÃ³ximamente)]
-      summary: '[Pendiente] Consultar lotes del conductor'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
-
-  /api/v1/me/packages:
-    get:
-      tags: [Conductor (prÃ³ximamente)]
-      summary: '[Pendiente] Consultar paquetes del conductor'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
 
   /api/v1/batches/{id}/start-route:
     post:
@@ -1828,26 +1787,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/v1/packages/{id}/deliver:
-    post:
-      tags: [Entregas (prÃ³ximamente)]
-      summary: '[Pendiente] Registrar entrega de un paquete'
-      parameters:
-        - $ref: '#/components/parameters/PackageId'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
-
-  /api/v1/packages/{id}/fail:
-    post:
-      tags: [Entregas (prÃ³ximamente)]
-      summary: '[Pendiente] Registrar entrega fallida'
-      parameters:
-        - $ref: '#/components/parameters/PackageId'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
-
   /api/v1/tracking/{trackingId}:
     get:
       tags: [Seguimiento]
@@ -2076,20 +2015,6 @@ paths:
         '422':
           $ref: '#/components/responses/DashboardInvalidParams'
 
-  /api/v1/zones:
-    get:
-      tags: [Zonas (prÃ³ximamente)]
-      summary: '[Pendiente] Listar zonas'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
-    post:
-      tags: [Zonas (prÃ³ximamente)]
-      summary: '[Pendiente] Crear zona'
-      responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
-
 components:
   securitySchemes:
     bearerAuth:
@@ -2169,14 +2094,6 @@ components:
             message: El rango de fechas no es valido
             campos:
               desde: La fecha "desde" no puede ser posterior a "hasta"
-    NotImplemented:
-      description: Endpoint registrado, pero su funcionalidad aÃºn no estÃ¡ implementada
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/MessageResponse'
-          example:
-            message: Endpoint aÃºn no implementado
     BadRequest:
       description: Solicitud invÃ¡lida
       content:
@@ -2692,6 +2609,10 @@ components:
               type: string
             zona:
               type: string
+        asignacion_respaldo:
+          type: boolean
+          description: true si Python no respondio y el lote lo asigno el respaldo FIFO de PHP.
+          example: false
         correo_enviado:
           type: object
           description: >
@@ -3313,6 +3234,10 @@ components:
         version:
           type: integer
           example: 1
+        ruta_optimizada:
+          type: boolean
+          description: false si Python no respondio y las paradas quedaron en orden de registro.
+          example: true
         conductor:
           type: object
           properties:
