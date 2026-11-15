@@ -92,42 +92,23 @@ final readonly class MySqlPackageRegistrationRepository implements PackageRegist
         if ($lock) {
             $packageQuery->lockForUpdate();
         }
-        $packages = $packageQuery->get(['id_lote', 'peso_kg', 'ubigeo_destino', 'destino_lat', 'destino_lng']);
-        // Centro del distrito para los paquetes sin punto en el mapa (solo lectura, sin bloqueo).
-        $districtPoints = $this->connection->table('distritos')
-            ->whereIn('ubigeo', $packages->pluck('ubigeo_destino')->unique()->values()->all())
-            ->get(['ubigeo', 'lat', 'lng'])->keyBy('ubigeo');
         $totals = [];
-        foreach ($packages as $package) {
+        foreach ($packageQuery->get(['id_lote', 'peso_kg']) as $package) {
             $id = (int) $package->id_lote;
-            $totals[$id] ??= ['count' => 0, 'weight' => 0, 'lat' => 0.0, 'lng' => 0.0, 'points' => 0];
+            $totals[$id] ??= ['count' => 0, 'weight' => 0];
             $totals[$id]['count']++;
             $totals[$id]['weight'] += DecimalQuantity::units($package->peso_kg, 2);
-            $district = $districtPoints[$package->ubigeo_destino] ?? null;
-            $lat = $package->destino_lat ?? $district?->lat;
-            $lng = $package->destino_lng ?? $district?->lng;
-            if ($lat !== null && $lng !== null) {
-                $totals[$id]['lat'] += (float) $lat;
-                $totals[$id]['lng'] += (float) $lng;
-                $totals[$id]['points']++;
-            }
         }
         $batches = [];
         foreach ($rows as $batch) {
-            $total = $totals[(int) $batch->id] ?? ['count' => 0, 'weight' => 0, 'points' => 0];
-            $data = [
+            $total = $totals[(int) $batch->id] ?? ['count' => 0, 'weight' => 0];
+            $batches[] = [
                 'id' => (int) $batch->id,
                 'id_tipo_vehiculo' => (int) $batch->id_tipo_vehiculo,
                 'cantidad_paquetes' => $total['count'],
                 'peso_total_kg' => DecimalQuantity::format($total['weight'], 2),
                 'created_at' => (new DateTimeImmutable($batch->created_at, new DateTimeZone('UTC')))->format(DATE_ATOM),
             ];
-            if ($total['points'] > 0) {
-                // Centro del lote = promedio de los puntos de sus paquetes. Python mide la cercanía con él.
-                $data['centro_lat'] = round($total['lat'] / $total['points'], 6);
-                $data['centro_lng'] = round($total['lng'] / $total['points'], 6);
-            }
-            $batches[] = $data;
         }
 
         return new AssignmentSnapshot($context, $details, $vehicles, $batches);

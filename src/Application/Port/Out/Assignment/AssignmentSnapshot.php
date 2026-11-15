@@ -23,21 +23,13 @@ final readonly class AssignmentSnapshot
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        $data = [
+        return [
             'id_sede' => $this->context->sedeId,
             'ubigeo_destino' => $this->context->destinationUbigeo,
             'paquete' => $this->details->measurements(),
             'vehiculos' => $this->vehicles,
             'lotes_candidatos' => $this->batches,
         ];
-        $address = $this->details->address;
-        if ($address['lat'] !== null && $address['lng'] !== null) {
-            // Punto elegido en el mapa: Python lo usa para agrupar paquetes cercanos en un lote.
-            $data['destino_lat'] = (float) $address['lat'];
-            $data['destino_lng'] = (float) $address['lng'];
-        }
-
-        return $data;
     }
 
     /** Valida la recomendación externa antes de usar los identificadores para guardar datos. */
@@ -58,10 +50,10 @@ final readonly class AssignmentSnapshot
             && $batch['cantidad_paquetes'] + 1 <= $vehicle['max_paquetes']
             && DecimalQuantity::units($batch['peso_total_kg'], 2) + $this->details->weightUnits
                 <= DecimalQuantity::units($vehicle['peso_max_total_kg'], 2)));
-        // Python decide el lote (por antigüedad y cercanía); PHP solo verifica que sea seguro usarlo.
-        // CREAR_LOTE siempre es válido: Python puede crear uno nuevo si los abiertos quedan lejos.
-        if ($assignment->batchId !== null
-            && !in_array($assignment->batchId, array_column($available, 'id'), true)) {
+        usort($available, static fn (array $a, array $b): int =>
+            [new \DateTimeImmutable($a['created_at']), $a['id']] <=> [new \DateTimeImmutable($b['created_at']), $b['id']]);
+        $expectedBatch = $available[0]['id'] ?? null;
+        if ($assignment->batchId !== $expectedBatch) {
             throw new AssignmentUnavailable('El servicio de asignacion devolvio un lote incompatible');
         }
     }
