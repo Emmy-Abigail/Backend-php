@@ -11,15 +11,19 @@ use App\Application\Port\In\Package\GetPackageQuery;
 use App\Application\Port\In\Package\GetPackageResult;
 use App\Application\Port\In\Package\GetPackageUseCase;
 use App\Application\Port\Out\Persistence\PackageQueryRepository;
+use App\Application\Port\Out\Persistence\PackageRetrySourceRepository;
 use App\Domain\Package\AddressCorrectionPolicy;
+use App\Domain\Package\RetryPolicy;
 
 final readonly class GetPackageService implements GetPackageUseCase
 {
     /** Estados del lote en los que el conductor trabaja con sus paquetes. */
     private const DRIVER_BATCH_STATUSES = ['ASIGNADO', 'EN_RUTA'];
 
-    public function __construct(private PackageQueryRepository $repository)
-    {
+    public function __construct(
+        private PackageQueryRepository $repository,
+        private ?PackageRetrySourceRepository $retrySources = null,
+    ) {
     }
 
     public function execute(GetPackageQuery $query): GetPackageResult
@@ -49,6 +53,7 @@ final readonly class GetPackageService implements GetPackageUseCase
                     $last['estado_nuevo'] ?? null,
                     $last['motivo_fallo']['codigo'] ?? null,
                 ),
+                'reintentos_restantes' => $this->remainingRetries($query->packageId),
             ]);
         }
 
@@ -61,5 +66,19 @@ final readonly class GetPackageService implements GetPackageUseCase
         unset($data['remitente'], $data['costo_estimado']);
 
         return new GetPackageResult($data + ['historial' => $detail->history, 'requiere_corregir_direccion' => false]);
+    }
+
+    /**
+     * DEMO 4: MAX_RETRIES - reintentos previos del envío; 0 si fue RECHAZADO o si el paquete ya tiene su reintento.
+     * Así el front deshabilita "Reasignar" sin esperar el 409.
+     */
+    private function remainingRetries(int $packageId): ?int
+    {
+        $source = $this->retrySources?->findRetrySource($packageId);
+        if ($source === null) {
+            return null;
+        }
+
+        return RetryPolicy::remaining($source->lastStatus, $source->failureReason, $source->previousRetries, $source->alreadyRetried);
     }
 }

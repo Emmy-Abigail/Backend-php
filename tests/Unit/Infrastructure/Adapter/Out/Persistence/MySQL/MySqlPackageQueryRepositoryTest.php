@@ -30,7 +30,7 @@ final class MySqlPackageQueryRepositoryTest extends TestCase
             'CREATE TABLE sedes (id INTEGER PRIMARY KEY, nombre TEXT)',
             'CREATE TABLE clientes (id INTEGER PRIMARY KEY, tipo_documento TEXT, numero_documento TEXT, nombres_razon_social TEXT, celular TEXT, correo TEXT)',
             'CREATE TABLE tipos_vehiculo (id INTEGER PRIMARY KEY, codigo TEXT, nombre TEXT)',
-            'CREATE TABLE lotes (id INTEGER PRIMARY KEY, codigo TEXT, estado TEXT, id_conductor INTEGER, id_tipo_vehiculo INTEGER)',
+            'CREATE TABLE lotes (id INTEGER PRIMARY KEY, codigo TEXT, estado TEXT, id_conductor INTEGER, id_tipo_vehiculo INTEGER, despachado_at TEXT)',
             'CREATE TABLE usuarios (id INTEGER PRIMARY KEY, nombres TEXT, rol TEXT, placa TEXT)',
             'CREATE TABLE motivos_fallo (id INTEGER PRIMARY KEY, codigo TEXT, nombre TEXT)',
             'CREATE TABLE historial_estados (id INTEGER PRIMARY KEY, id_paquete INTEGER, estado_anterior_id INTEGER, estado_nuevo_id INTEGER, id_usuario_ejecutor INTEGER, id_motivo_fallo INTEGER, motivo_otro TEXT, comentario TEXT, evidencia_key TEXT, created_at TEXT)',
@@ -109,6 +109,7 @@ final class MySqlPackageQueryRepositoryTest extends TestCase
         $detail = $this->repository->findDetail(2);
         self::assertSame(['id' => 1, 'codigo' => 'MOTORIZADO', 'nombre' => 'Motorizado'], $detail->data['vehiculo']);
         self::assertSame('2026-10-24T00:00:00-05:00', $detail->data['fecha_ingreso']);
+        self::assertSame('2026-10-26T00:00:00-05:00', $detail->data['fecha_estimada_entrega']);
         self::assertSame(10, $detail->data['lote']['id']);
     }
 
@@ -181,9 +182,12 @@ final class MySqlPackageQueryRepositoryTest extends TestCase
             array_replace($base, ['id' => 4, 'estado_anterior_id' => 5, 'estado_nuevo_id' => 3, 'created_at' => '2026-10-24 07:00:00', 'id_motivo_fallo' => 1, 'comentario' => 'Vecino dijo que viajo']),
         ]);
 
+        $this->db->table('lotes')->where('id', 10)->update(['despachado_at' => '2026-10-24 06:00:00']);
         $tracking = $this->repository->findPublicTracking('TEST2');
 
-        self::assertSame(['tracking_id', 'estado', 'destino', 'fecha_ingreso', 'linea_de_tiempo'], array_keys($tracking));
+        self::assertSame(['tracking_id', 'estado', 'destino', 'fecha_ingreso', 'fecha_despacho', 'fecha_estimada_entrega', 'linea_de_tiempo'], array_keys($tracking));
+        self::assertSame('2026-10-24T01:00:00-05:00', $tracking['fecha_despacho']);
+        self::assertSame('2026-10-26T00:00:00-05:00', $tracking['fecha_estimada_entrega']);
         self::assertSame('FALLIDO', $tracking['estado']['codigo']);
         self::assertSame(['distrito' => 'Miraflores'], $tracking['destino']);
         self::assertSame('2026-10-24T00:00:00-05:00', $tracking['fecha_ingreso']);
@@ -196,6 +200,16 @@ final class MySqlPackageQueryRepositoryTest extends TestCase
         foreach (['Cliente 2', '41234567', '912345678', 'Prueba', 'Remitente', 'Conductor', 'TEST01', 'Vecino dijo'] as $private) {
             self::assertStringNotContainsString($private, $json);
         }
+    }
+
+    public function test_tracking_sin_despachar_no_tiene_fecha_de_despacho(): void
+    {
+        $this->db->table('paquetes')->where('id', 2)->update(['id_lote' => null]);
+
+        $tracking = $this->repository->findPublicTracking('TEST2');
+
+        self::assertNull($tracking['fecha_despacho']);
+        self::assertSame('2026-10-26T00:00:00-05:00', $tracking['fecha_estimada_entrega']);
     }
 
     public function test_historial_incluye_el_motivo_escrito_cuando_es_otros(): void
