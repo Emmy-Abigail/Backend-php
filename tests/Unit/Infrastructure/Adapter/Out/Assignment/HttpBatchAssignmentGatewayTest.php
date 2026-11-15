@@ -82,4 +82,33 @@ final class HttpBatchAssignmentGatewayTest extends TestCase
         $this->expectException(AssignmentUnavailable::class);
         (new HttpBatchAssignmentGateway($transport, '', ''))->evaluate(PackageFixture::snapshot());
     }
+
+    public function test_retries_once_when_python_does_not_answer(): void
+    {
+        $calls = 0;
+        $transport = $this->createMock(HttpTransport::class);
+        $transport->expects($this->exactly(2))->method('post')->willReturnCallback(
+            static function () use (&$calls): HttpResponse {
+                if (++$calls === 1) {
+                    throw new \RuntimeException('timeout');
+                }
+
+                return new HttpResponse(200, '{"accion":"CREAR_LOTE","id_tipo_vehiculo":1,"id_lote":null}');
+            },
+        );
+
+        $result = (new HttpBatchAssignmentGateway($transport, 'http://python:8000', 'test-key'))->evaluate(PackageFixture::snapshot());
+
+        self::assertSame('CREAR_LOTE', $result->action);
+    }
+
+    public function test_does_not_retry_a_wrong_api_key(): void
+    {
+        $transport = $this->createMock(HttpTransport::class);
+        $transport->expects($this->once())->method('post')
+            ->willReturn(new HttpResponse(401, '{"error":"datos_invalidos","detalle":"clave"}'));
+
+        $this->expectException(AssignmentUnavailable::class);
+        (new HttpBatchAssignmentGateway($transport, 'http://python:8000', 'test-key'))->evaluate(PackageFixture::snapshot());
+    }
 }

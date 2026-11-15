@@ -22,13 +22,20 @@ final readonly class RegisterPackageResult
         public PackageQuote $quote,
         public array $batch,
         public array $emailsSent = ['remitente' => null, 'destinatario' => null],
+        public bool $assignmentFallback = false,
     ) {
     }
 
     /** @param array{remitente: ?bool, destinatario: ?bool} $emailsSent */
     public function withEmailsSent(array $emailsSent): self
     {
-        return new self($this->id, $this->tracking, $this->registeredAt, $this->quote, $this->batch, $emailsSent);
+        return new self($this->id, $this->tracking, $this->registeredAt, $this->quote, $this->batch, $emailsSent, $this->assignmentFallback);
+    }
+
+    /** Indica que el lote lo asignó el respaldo FIFO de PHP porque Python no respondió. */
+    public function withAssignmentFallback(bool $assignmentFallback): self
+    {
+        return new self($this->id, $this->tracking, $this->registeredAt, $this->quote, $this->batch, $this->emailsSent, $assignmentFallback);
     }
 
     /** @return array<string, mixed> */
@@ -42,6 +49,7 @@ final readonly class RegisterPackageResult
             'cotizacion' => ['id_tarifa' => $this->quote->tariffId, 'monto' => (float) $this->quote->amount],
             'lote' => $this->batch,
             'correo_enviado' => $this->emailsSent,
+            'asignacion_respaldo' => $this->assignmentFallback,
         ];
     }
 }

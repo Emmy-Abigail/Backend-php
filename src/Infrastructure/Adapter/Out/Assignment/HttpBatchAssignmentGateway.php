@@ -8,11 +8,14 @@ use App\Application\Exception\AssignmentUnavailable;
 use App\Application\Port\Out\Assignment\AssignmentSnapshot;
 use App\Application\Port\Out\Assignment\BatchAssignment;
 use App\Application\Port\Out\Assignment\BatchAssignmentGateway;
+use App\Infrastructure\Adapter\Out\Http\HttpResponse;
 use App\Infrastructure\Adapter\Out\Http\HttpTransport;
 use Throwable;
 
 final readonly class HttpBatchAssignmentGateway implements BatchAssignmentGateway
 {
+    private const MAX_ATTEMPTS = 2;
+
     public function __construct(
         private HttpTransport $transport,
         private string $baseUrl,
@@ -32,14 +35,10 @@ final readonly class HttpBatchAssignmentGateway implements BatchAssignmentGatewa
             throw new AssignmentUnavailable('Servicio de asignacion no disponible');
         }
 
+        $response = $this->send($snapshot);
+
         try {
-            $response = $this->transport->post(
-                rtrim($this->baseUrl, '/') . '/api/v1/batch-assignments/evaluate',
-                $snapshot->toArray(),
-                $this->apiKey,
-                $this->timeout,
-            );
-            if ($response->status !== 200) {
+            if ($response === null || $response->status !== 200) {
                 // Un 401 de Python indica un error de configuración entre servicios, no en la sesión del operador.
                 throw new AssignmentUnavailable('Servicio de asignacion no disponible');
             }
@@ -58,5 +57,28 @@ final readonly class HttpBatchAssignmentGateway implements BatchAssignmentGatewa
             // Nunca enviar a Angular los cuerpos originales del servicio externo, claves, URL ni detalles de excepciones.
             throw new AssignmentUnavailable('Servicio de asignacion no disponible');
         }
+    }
+
+    /**
+     * Red, tiempo agotado o 5xx (por ejemplo, Python despertando en Render): se reintenta una vez.
+     * Un 401 o un 422 no se reintentan: reintentar no los arregla.
+     */
+    private function send(AssignmentSnapshot $snapshot): ?HttpResponse
+    {
+        $url = rtrim($this->baseUrl, '/') . '/api/v1/batch-assignments/evaluate';
+        $response = null;
+        for ($attempt = 1; $attempt <= self::MAX_ATTEMPTS; $attempt++) {
+            try {
+                $response = $this->transport->post($url, $snapshot->toArray(), $this->apiKey, $this->timeout);
+            } catch (Throwable) {
+                $response = null;
+                continue;
+            }
+            if ($response->status < 500) {
+                return $response;
+            }
+        }
+
+        return $response;
     }
 }

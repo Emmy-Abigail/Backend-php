@@ -318,15 +318,12 @@ final class PackageRegistrationMySqlTest extends TestCase
         }
     }
 
-    public function test_python_failure_returns_503_without_partial_registration(): void
+    public function test_python_failure_registers_with_the_php_fallback(): void
     {
         $this->withHttpServer(function (string $address, string $jwt): void {
             [$status, $body] = $this->post($address, $jwt, '/api/v1/packages', PackageFixture::body());
-            self::assertStringContainsString('503', $status);
-            self::assertSame('asignacion_no_disponible', $body['error']);
-            foreach (['clientes', 'lotes', 'paquetes', 'historial_estados'] as $table) {
-                self::assertSame(0, self::$db->table($table)->count());
-            }
+            self::assertStringContainsString('201', $status);
+            self::assertTrue($body['asignacion_respaldo']);
         }, ['ASSIGNMENT_SERVICE_URL' => 'http://127.0.0.1:1', 'ASSIGNMENT_API_KEY' => 'solo-pruebas']);
     }
 

@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Application\Service\Package;
 
+use App\Application\Exception\AssignmentUnavailable;
 use App\Application\Exception\PackageRegistrationConflict;
 use App\Application\Exception\RegistrationSnapshotChanged;
 use App\Application\Exception\UserNotAllowed;
 use App\Application\Port\In\Package\RegisterPackageCommand;
 use App\Application\Port\In\Package\RegisterPackageResult;
 use App\Application\Port\In\Package\RegisterPackageUseCase;
+use App\Application\Port\Out\Assignment\AssignmentSnapshot;
+use App\Application\Port\Out\Assignment\BatchAssignment;
 use App\Application\Port\Out\Assignment\BatchAssignmentGateway;
 use App\Application\Port\Out\Notification\TrackingCodeMailer;
 use App\Application\Port\Out\Persistence\PackageRegistrationRepository;
@@ -40,8 +43,7 @@ final readonly class RegisterPackageService implements RegisterPackageUseCase
             // No abrir transacciones, llamar a Python ni guardar datos antes de disponer de una cotización real.
             $quote = $this->pricing->quote($command->details, $context);
             $snapshot = $this->repository->snapshot($context, $command->details);
-            $assignment = $this->assignment->evaluate($snapshot);
-            $snapshot->assertValid($assignment);
+            [$assignment, $fallback] = $this->assign($snapshot);
 
             try {
                 $result = $this->repository->register($command, $snapshot, $assignment, $quote, $this->tracking->generate());
@@ -51,10 +53,32 @@ final readonly class RegisterPackageService implements RegisterPackageUseCase
                 continue;
             }
 
-            return $result->withEmailsSent($this->sendTrackingCodes($command, $result->tracking));
+            return $result
+                ->withEmailsSent($this->sendTrackingCodes($command, $result->tracking))
+                ->withAssignmentFallback($fallback);
         }
 
         throw new PackageRegistrationConflict('La asignacion cambio durante el registro; vuelve a intentarlo');
+    }
+
+    /**
+     * Respaldo (enunciado, pág. 6): si Python no responde o su respuesta no es válida,
+     * PHP aplica las mismas reglas FIFO (R2 a R6) y el registro continúa.
+     *
+     * @return array{0: BatchAssignment, 1: bool}
+     */
+    private function assign(AssignmentSnapshot $snapshot): array
+    {
+        try {
+            $assignment = $this->assignment->evaluate($snapshot);
+            $snapshot->assertValid($assignment);
+
+            return [$assignment, false];
+        } catch (AssignmentUnavailable) {
+            error_log('Asignacion de Python no disponible: se usa el respaldo FIFO de PHP');
+
+            return [$snapshot->expectedAssignment(), true];
+        }
     }
 
     /**
