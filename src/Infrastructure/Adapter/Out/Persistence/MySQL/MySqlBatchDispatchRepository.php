@@ -133,9 +133,10 @@ final readonly class MySqlBatchDispatchRepository implements BatchDispatchReposi
         }
 
         // Revalidar los pesos actuales, no los del registro ni una suma enviada por el cliente.
-        // El bloqueo compartido mantiene la capacidad vigente estable hasta confirmar el despacho.
+        // El bloqueo exclusivo mantiene la capacidad vigente estable hasta confirmar el despacho.
+        // (TiDB no soporta LOCK IN SHARE MODE, por eso no se usa sharedLock).
         $vehicle = $this->connection->table('tipos_vehiculo')->where('id', $batch->id_tipo_vehiculo)
-            ->sharedLock()->first(['peso_max_total_kg']);
+            ->LockForUpdate()->first(['peso_max_total_kg']);
         if ($vehicle === null) {
             throw new InvalidCatalogReference('El tipo de vehiculo del lote no existe');
         }
