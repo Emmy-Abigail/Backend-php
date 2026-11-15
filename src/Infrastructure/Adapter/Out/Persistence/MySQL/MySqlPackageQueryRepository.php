@@ -9,6 +9,7 @@ use App\Application\Port\In\Package\ListPackagesResult;
 use App\Application\Port\Out\Persistence\PackageDetail;
 use App\Application\Port\Out\Persistence\PackageQueryRepository;
 use App\Domain\Package\Coordinates;
+use App\Domain\Package\DeliveryEstimate;
 use DateTimeImmutable;
 use DateTimeZone;
 use Illuminate\Database\Connection;
@@ -215,6 +216,7 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
                 ],
             ],
             'fecha_ingreso' => $this->formatDate($row->fecha_ingreso),
+            'fecha_estimada_entrega' => $this->estimatedDelivery($row->fecha_ingreso),
         ];
 
         return new PackageDetail(
@@ -280,6 +282,7 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
         $row = $this->connection->table('paquetes as p')
             ->join('estados_paquete as e', 'e.id', '=', 'p.estado_actual_id')
             ->join('distritos as d', 'd.ubigeo', '=', 'p.ubigeo_destino')
+            ->leftJoin('lotes as l', 'l.id', '=', 'p.id_lote')
             ->where('p.tracking_id', $trackingId)
             ->first([
                 'p.id',
@@ -288,6 +291,7 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
                 'e.nombre as estado_nombre',
                 'd.nombre_mostrado as distrito',
                 'p.fecha_ingreso',
+                'l.despachado_at',
             ]);
 
         if ($row === null) {
@@ -318,8 +322,16 @@ final readonly class MySqlPackageQueryRepository implements PackageQueryReposito
             'estado' => ['codigo' => $row->estado_codigo, 'nombre' => $row->estado_nombre],
             'destino' => ['distrito' => $row->distrito],
             'fecha_ingreso' => $this->formatDate($row->fecha_ingreso),
+            // Cuándo se asignó su lote a un conductor; null mientras sigue en almacén.
+            'fecha_despacho' => $row->despachado_at === null ? null : $this->formatDate($row->despachado_at),
+            'fecha_estimada_entrega' => $this->estimatedDelivery($row->fecha_ingreso),
             'linea_de_tiempo' => $timeline,
         ];
+    }
+
+    private function estimatedDelivery(string $registeredAt): string
+    {
+        return LimaTime::format(DeliveryEstimate::from(new DateTimeImmutable($registeredAt, new DateTimeZone('UTC'))));
     }
 
     /** Los filtros representan dias de Lima, pero la BD guarda UTC. */

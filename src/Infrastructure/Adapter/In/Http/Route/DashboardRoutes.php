@@ -2,16 +2,28 @@
 
 declare(strict_types=1);
 
-use Psr\Http\Message\ResponseInterface;
-use Psr\Http\Message\ServerRequestInterface;
+use App\Infrastructure\Adapter\In\Http\Action\Dashboard\GetDashboardMetricsAction;
+use App\Infrastructure\Adapter\In\Http\Action\Dashboard\ListFailedDeliveriesAction;
+use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
+use App\Infrastructure\Adapter\In\Http\Middleware\MustChangePasswordMiddleware;
+use App\Infrastructure\Adapter\In\Http\Middleware\RoleMiddleware;
 use Slim\App;
 
-return static function (App $app): void {
-    $notImplemented = static function (ServerRequestInterface $request, ResponseInterface $response): ResponseInterface {
-        $response->getBody()->write(json_encode(['message' => 'Endpoint aún no implementado']));
-
-        return $response->withHeader('Content-Type', 'application/json')->withStatus(501);
-    };
-
-    $app->get('/api/v1/dashboard/metrics', $notImplemented);
+return static function (
+    App $app,
+    GetDashboardMetricsAction $getDashboardMetricsAction,
+    ListFailedDeliveriesAction $listFailedDeliveriesAction,
+    JwtAuthMiddleware $jwtAuthMiddleware,
+    RoleMiddleware $adminOrOperatorRoleMiddleware,
+    MustChangePasswordMiddleware $mustChangePasswordMiddleware,
+): void {
+    // Administrador: todas las sedes o la elegida. Operador: siempre su sede (la decide el servicio).
+    $app->get('/api/v1/dashboard/metrics', $getDashboardMetricsAction)
+        ->add($adminOrOperatorRoleMiddleware)
+        ->add($mustChangePasswordMiddleware)
+        ->add($jwtAuthMiddleware);
+    $app->get('/api/v1/dashboard/failed-deliveries', $listFailedDeliveriesAction)
+        ->add($adminOrOperatorRoleMiddleware)
+        ->add($mustChangePasswordMiddleware)
+        ->add($jwtAuthMiddleware);
 };

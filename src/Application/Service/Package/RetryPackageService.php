@@ -19,6 +19,7 @@ use App\Domain\Package\PackageDetails;
 use App\Domain\Package\DeliveryAddress;
 use App\Domain\Package\AddressCorrectionPolicy;
 use App\Domain\Package\InvalidPackageData;
+use App\Domain\Package\RetryPolicy;
 
 /**
  * Crea el reintento de un paquete FALLIDO como un paquete nuevo: uno por paquete y como máximo
@@ -27,7 +28,7 @@ use App\Domain\Package\InvalidPackageData;
  */
 final readonly class RetryPackageService implements RetryPackageUseCase
 {
-    public const MAX_RETRIES = 3;
+    public const MAX_RETRIES = RetryPolicy::MAX_RETRIES;
 
     public function __construct(
         private PackageRetrySourceRepository $sources,
@@ -51,6 +52,10 @@ final readonly class RetryPackageService implements RetryPackageUseCase
         }
         if ($source->status !== 'FALLIDO') {
             throw new PackageNotRetryable('Solo se puede reintentar un paquete FALLIDO');
+        }
+        // RECHAZADO es un flujo cerrado: se valida aquí y no solo en el front, que podría saltarse con una llamada directa.
+        if (RetryPolicy::isRejected($source->lastStatus, $source->failureReason)) {
+            throw new PackageNotRetryable('El destinatario rechazo el paquete; no se puede reintentar');
         }
         // Un reintento que también falla se puede reintentar, hasta MAX_RETRIES por envío.
         if ($source->previousRetries >= self::MAX_RETRIES) {

@@ -11,6 +11,9 @@ use App\Application\Service\Batch\DispatchBatchService;
 use App\Application\Service\Batch\GetBatchService;
 use App\Application\Service\Batch\ListBatchesService;
 use App\Application\Service\Batch\StartRouteService;
+use App\Application\Service\Dashboard\DashboardAccess;
+use App\Application\Service\Dashboard\GetDashboardMetricsService;
+use App\Application\Service\Dashboard\ListFailedDeliveriesService;
 use App\Application\Service\Delivery\FinalStatusService;
 use App\Application\Service\Delivery\GetEvidenceService;
 use App\Application\Service\Catalog\GetFailureReasonsService;
@@ -37,6 +40,8 @@ use App\Infrastructure\Adapter\In\Http\Action\Batch\DispatchBatchAction;
 use App\Infrastructure\Adapter\In\Http\Action\Batch\GetBatchAction;
 use App\Infrastructure\Adapter\In\Http\Action\Batch\ListBatchesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Batch\StartRouteAction;
+use App\Infrastructure\Adapter\In\Http\Action\Dashboard\GetDashboardMetricsAction;
+use App\Infrastructure\Adapter\In\Http\Action\Dashboard\ListFailedDeliveriesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Delivery\FinalStatusAction;
 use App\Infrastructure\Adapter\In\Http\Action\Delivery\GetEvidenceAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetCatalogsAction;
@@ -67,6 +72,7 @@ use App\Infrastructure\Adapter\Out\Geocoding\PhotonGeocodingGateway;
 use App\Infrastructure\Adapter\Out\Http\StreamHttpTransport;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageQueryRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlBatchDispatchRepository;
+use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlDashboardReadRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlBatchReadRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlBatchRouteRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlFinalStatusRepository;
@@ -246,13 +252,14 @@ $registerPackageService = new RegisterPackageService(
 );
 $registerPackageAction = new RegisterPackageAction($registerPackageService);
 // El reintento de un paquete FALLIDO reutiliza el mismo registro (precio, Python, lote y tracking nuevos).
+$retrySourceRepository = new MySqlPackageRetrySourceRepository(Capsule::connection());
 $retryPackageAction = new RetryPackageAction(new RetryPackageService(
-    new MySqlPackageRetrySourceRepository(Capsule::connection()),
+    $retrySourceRepository,
     $registerPackageService,
 ));
 $packageQueryRepository = new MySqlPackageQueryRepository(Capsule::connection());
 $listPackagesAction = new ListPackagesAction(new ListPackagesService($packageQueryRepository));
-$getPackageAction = new GetPackageAction(new GetPackageService($packageQueryRepository));
+$getPackageAction = new GetPackageAction(new GetPackageService($packageQueryRepository, $retrySourceRepository));
 $registerPackageRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/PackageRoutes.php';
 $registerPackageRoutes(
     $app,
@@ -337,8 +344,20 @@ $registerTrackingRoutes(
     ),
 );
 
+// Dashboard (Administrador y Operador): solo lectura sobre paquetes, historial y lotes.
+$dashboardRepository = new MySqlDashboardReadRepository(Capsule::connection());
+$dashboardAccess = new DashboardAccess($catalogRepository);
+$registerDashboardRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/DashboardRoutes.php';
+$registerDashboardRoutes(
+    $app,
+    new GetDashboardMetricsAction(new GetDashboardMetricsService($dashboardRepository, $catalogRepository, $dashboardAccess)),
+    new ListFailedDeliveriesAction(new ListFailedDeliveriesService($dashboardRepository, $dashboardAccess)),
+    $jwtAuthMiddleware,
+    new RoleMiddleware('ADMINISTRADOR', 'OPERADOR'),
+    $mustChangePasswordMiddleware,
+);
+
 $routeFiles = [
-    __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/DashboardRoutes.php',
     __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/ZoneRoutes.php',
 ];
 
