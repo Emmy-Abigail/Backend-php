@@ -34,7 +34,7 @@ tags:
   - name: Conductor (prÃ³ximamente)
   - name: Entregas (prÃ³ximamente)
   - name: Seguimiento (prÃ³ximamente)
-  - name: Dashboard (prÃ³ximamente)
+  - name: Dashboard
   - name: Zonas (prÃ³ximamente)
 
 paths:
@@ -1926,11 +1926,131 @@ paths:
 
   /api/v1/dashboard/metrics:
     get:
-      tags: [Dashboard (prÃ³ximamente)]
-      summary: '[Pendiente] Consultar mÃ©tricas del dashboard'
+      tags: [Dashboard]
+      summary: Consultar las metricas del dashboard (Demo 4)
+      operationId: getDashboardMetrics
+      description: |
+        ADMINISTRADOR u OPERADOR con el cambio inicial de password completado.
+        - ADMINISTRADOR: sin id_sede ve todas las sedes (incluye ranking_sedes); con id_sede ve solo esa sede.
+        - OPERADOR: siempre ve su propia sede, tomada de la sesion; id_sede se ignora.
+        El periodo son dias completos de America/Lima (ambos incluidos, maximo 366 dias); la BD guarda UTC.
+        Los registrados se cuentan por fecha de ingreso; las entregas y fallos, por el dia en que el conductor los marco.
+        Porcentajes y horas con 1 decimal; null cuando no hay datos (el cliente muestra "-").
+        El conductor y el tipo de vehiculo de cada entrega son los del lote en que viajo el paquete.
+        Las fechas de respuesta van en ISO 8601 con offset -05:00.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DashboardDesde'
+        - $ref: '#/components/parameters/DashboardHasta'
+        - $ref: '#/components/parameters/DashboardSede'
       responses:
-        '501':
-          $ref: '#/components/responses/NotImplemented'
+        '200':
+          description: Metricas del periodo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/DashboardMetrics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/DashboardInvalidParams'
+
+  /api/v1/dashboard/failed-deliveries:
+    get:
+      tags: [Dashboard]
+      summary: Listar todas las entregas fallidas del periodo (ventana "Ver todos")
+      operationId: listDashboardFailedDeliveries
+      description: |
+        Mismo rango de fechas y mismas reglas de sede que /dashboard/metrics.
+        Ordena del fallo mas reciente al mas antiguo, segun el momento en que el conductor lo marco.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DashboardDesde'
+        - $ref: '#/components/parameters/DashboardHasta'
+        - $ref: '#/components/parameters/DashboardSede'
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 8
+      responses:
+        '200':
+          description: Pagina de entregas fallidas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                          description: Id del paquete
+                        tracking_id:
+                          type: string
+                        destino:
+                          type: string
+                          description: Distrito de destino
+                        sede:
+                          type: string
+                        motivo:
+                          type: string
+                          nullable: true
+                          example: Cliente ausente
+                        motivo_codigo:
+                          type: string
+                          nullable: true
+                          enum: [CLIENTE_AUSENTE, DIRECCION_ERRONEA, RECHAZADO, OTRO]
+                        fecha_fallo:
+                          type: string
+                          format: date-time
+                          example: '2026-10-20T14:30:00-05:00'
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      per_page:
+                        type: integer
+                      total:
+                        type: integer
+                      total_pages:
+                        type: integer
+                      sede_nombre:
+                        type: string
+                        nullable: true
+                        description: null cuando el administrador consulta todas las sedes
+                      desde:
+                        type: string
+                        format: date
+                      hasta:
+                        type: string
+                        format: date
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/DashboardInvalidParams'
 
   /api/v1/zones:
     get:
@@ -1954,6 +2074,32 @@ components:
       bearerFormat: JWT
 
   parameters:
+    DashboardDesde:
+      name: desde
+      in: query
+      required: true
+      description: Primer dia del periodo (inclusive), AAAA-MM-DD en America/Lima.
+      schema:
+        type: string
+        format: date
+        example: '2026-10-01'
+    DashboardHasta:
+      name: hasta
+      in: query
+      required: true
+      description: Ultimo dia del periodo (inclusive), AAAA-MM-DD en America/Lima. Maximo 366 dias desde "desde".
+      schema:
+        type: string
+        format: date
+        example: '2026-10-31'
+    DashboardSede:
+      name: id_sede
+      in: query
+      required: false
+      description: Solo ADMINISTRADOR. Sin este parametro se consultan todas las sedes. Para OPERADOR se ignora.
+      schema:
+        type: integer
+        minimum: 1
     PackageId:
       name: id
       in: path
@@ -1977,6 +2123,28 @@ components:
       description: CÃ³digo de seguimiento
 
   responses:
+    DashboardInvalidParams:
+      description: Filtros invalidos (fechas ausentes o mal formadas, desde posterior a hasta, rango mayor a 366 dias, sede inexistente o paginacion fuera de rango)
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: parametros_invalidos
+              message:
+                type: string
+                example: El rango de fechas no es valido
+              campos:
+                type: object
+                additionalProperties:
+                  type: string
+          example:
+            error: parametros_invalidos
+            message: El rango de fechas no es valido
+            campos:
+              desde: La fecha "desde" no puede ser posterior a "hasta"
     NotImplemented:
       description: Endpoint registrado, pero su funcionalidad aÃºn no estÃ¡ implementada
       content:
@@ -2023,6 +2191,225 @@ components:
             error: validacion_fallida
 
   schemas:
+    DashboardRate:
+      type: number
+      format: float
+      nullable: true
+      description: Porcentaje o promedio con 1 decimal; null cuando no hay datos.
+    DashboardShare:
+      type: object
+      properties:
+        cantidad:
+          type: integer
+        porcentaje:
+          type: number
+          format: float
+          description: Parte del total con 1 decimal; 0 cuando el total es 0.
+    DashboardDriver:
+      type: object
+      properties:
+        id_conductor:
+          type: integer
+        nombre:
+          type: string
+        tipo_vehiculo:
+          type: string
+          nullable: true
+          enum: [MOTORIZADO, AUTO, CAMION]
+        tipo_vehiculo_label:
+          type: string
+          nullable: true
+          example: Motorizado
+        placa:
+          type: string
+        entregas_qty:
+          type: integer
+    DashboardOperatorStats:
+      type: object
+      properties:
+        registrados:
+          type: integer
+          description: Paquetes que registro en el periodo.
+        bien_registrados_pct:
+          $ref: '#/components/schemas/DashboardRate'
+        errores_direccion_qty:
+          type: integer
+          description: De los paquetes que registro en el periodo, cuantos fallaron por direccion erronea.
+        entregas_exitosas_pct:
+          $ref: '#/components/schemas/DashboardRate'
+        tiempo_asignacion_horas:
+          $ref: '#/components/schemas/DashboardRate'
+    DashboardMetrics:
+      type: object
+      properties:
+        kpis:
+          type: object
+          properties:
+            paquetes_registrados:
+              type: integer
+            entregas_exitosas_pct:
+              $ref: '#/components/schemas/DashboardRate'
+            entregas_exitosas_qty:
+              type: integer
+            finalizados_qty:
+              type: integer
+              description: Entregados mas fallidos marcados en el periodo.
+            tiempo_promedio_horas:
+              $ref: '#/components/schemas/DashboardRate'
+        flujo_paquetes:
+          type: object
+          description: Paquetes registrados en el periodo segun su estado actual.
+          properties:
+            total:
+              type: integer
+            en_almacen:
+              $ref: '#/components/schemas/DashboardShare'
+            asignado:
+              $ref: '#/components/schemas/DashboardShare'
+            en_ruta:
+              $ref: '#/components/schemas/DashboardShare'
+            entregado:
+              $ref: '#/components/schemas/DashboardShare'
+            fallido:
+              $ref: '#/components/schemas/DashboardShare'
+        ranking_sedes:
+          type: array
+          description: Solo ADMINISTRADOR sin id_sede.
+          items:
+            type: object
+            properties:
+              id_sede:
+                type: integer
+              nombre_sede:
+                type: string
+              paquetes_registrados:
+                type: integer
+              entregas_exitosas_pct:
+                $ref: '#/components/schemas/DashboardRate'
+              finalizados_qty:
+                type: integer
+              fallidos_qty:
+                type: integer
+              tiempo_promedio_horas:
+                $ref: '#/components/schemas/DashboardRate'
+              es_mas_baja:
+                type: boolean
+                description: Menor porcentaje de entregas exitosas entre las sedes con al menos 30 terminados; con empate, la de mas fallidos.
+              datos_insuficientes:
+                type: boolean
+                description: Menos de 30 paquetes terminados en el periodo.
+        fallidos_motivo:
+          type: object
+          properties:
+            total_fallidos:
+              type: integer
+            motivos:
+              type: array
+              description: Todos los motivos del catalogo, de mayor a menor cantidad.
+              items:
+                type: object
+                properties:
+                  codigo:
+                    type: string
+                    enum: [CLIENTE_AUSENTE, DIRECCION_ERRONEA, RECHAZADO, OTRO]
+                  motivo:
+                    type: string
+                    example: Cliente ausente
+                  cantidad:
+                    type: integer
+                  porcentaje:
+                    type: number
+                    format: float
+            direcciones_corregidas:
+              type: object
+              properties:
+                total_fallidos_direccion:
+                  type: integer
+                reintentados:
+                  type: integer
+                entregados:
+                  type: integer
+            ultimos_fallidos:
+              type: array
+              description: Los 3 fallos mas recientes del periodo.
+              items:
+                type: object
+                properties:
+                  id_paquete:
+                    type: integer
+                  tracking_id:
+                    type: string
+                  destino:
+                    type: string
+                  sede:
+                    type: string
+                  motivo:
+                    type: string
+                    nullable: true
+                  motivo_codigo:
+                    type: string
+                    nullable: true
+                  fecha:
+                    type: string
+                    format: date-time
+        top_conductores:
+          type: object
+          description: Top 5 por entregas. "todos" muestra el vehiculo actual del conductor; cada tipo usa el vehiculo del lote.
+          properties:
+            todos:
+              type: array
+              items:
+                $ref: '#/components/schemas/DashboardDriver'
+            motorizado:
+              type: array
+              items:
+                $ref: '#/components/schemas/DashboardDriver'
+            auto:
+              type: array
+              items:
+                $ref: '#/components/schemas/DashboardDriver'
+            camion:
+              type: array
+              items:
+                $ref: '#/components/schemas/DashboardDriver'
+        entregas_vehiculo:
+          type: object
+          properties:
+            total:
+              type: integer
+            motorizado:
+              $ref: '#/components/schemas/DashboardShare'
+            auto:
+              $ref: '#/components/schemas/DashboardShare'
+            camion:
+              $ref: '#/components/schemas/DashboardShare'
+        operadores:
+          type: array
+          description: Solo ADMINISTRADOR. Tabla completa; el cliente ordena, busca y pagina.
+          items:
+            allOf:
+              - type: object
+                properties:
+                  id_usuario:
+                    type: integer
+                  nombre:
+                    type: string
+                  sede:
+                    type: string
+              - $ref: '#/components/schemas/DashboardOperatorStats'
+        desempeno_operador:
+          description: Solo OPERADOR. Sus propios resultados.
+          allOf:
+            - $ref: '#/components/schemas/DashboardOperatorStats'
+        sede:
+          type: object
+          nullable: true
+          description: Sede consultada; null cuando el administrador ve todas las sedes.
+          properties:
+            id:
+              type: integer
+            nombre:
+              type: string
     StartRouteResponse:
       type: object
       required: [id, codigo, estado, started_at, cantidad_paquetes]
