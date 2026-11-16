@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Infrastructure\Adapter\In\Http\Route;
 
+use App\Application\Exception\GoogleAccountNotRegistered;
 use App\Application\Exception\UserNotAllowed;
 use App\Application\Port\In\Auth\AuthenticateTokenUseCase;
 use App\Application\Port\In\Auth\AuthenticatedUser;
 use App\Application\Port\In\Auth\ChangePasswordUseCase;
 use App\Application\Port\In\Auth\ConfirmPasswordResetUseCase;
+use App\Application\Port\In\Auth\GoogleLoginUseCase;
 use App\Application\Port\In\Auth\LoginUseCase;
 use App\Application\Port\In\Auth\RequestPasswordResetUseCase;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\ChangePasswordAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\ConfirmPasswordResetAction;
+use App\Infrastructure\Adapter\In\Http\Action\Auth\GoogleLoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\LoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\MeAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\RequestPasswordResetAction;
@@ -20,6 +23,7 @@ use App\Infrastructure\Adapter\In\Http\Action\Auth\SessionStatusAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
 use PHPUnit\Framework\Attributes\Test;
 use PHPUnit\Framework\TestCase;
+use Slim\Exception\HttpNotFoundException;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
 
@@ -62,6 +66,25 @@ final class AuthRoutesTest extends TestCase
         self::assertSame(401, $this->app($authenticateToken)->handle($request)->getStatusCode());
     }
 
+    #[Test]
+    public function la_ruta_de_google_existe_solo_si_esta_configurada(): void
+    {
+        $googleLogin = $this->createStub(GoogleLoginUseCase::class);
+        $googleLogin->method('execute')->willThrowException(new GoogleAccountNotRegistered());
+        $request = (new ServerRequestFactory())
+            ->createServerRequest('POST', '/api/v1/auth/google')
+            ->withParsedBody(['id_token' => 'id-token']);
+
+        $withGoogle = $this->app($this->createStub(AuthenticateTokenUseCase::class), new GoogleLoginAction($googleLogin));
+        $response = $withGoogle->handle($request);
+        self::assertSame(401, $response->getStatusCode());
+        self::assertSame('cuenta_no_registrada', json_decode((string) $response->getBody(), true)['error']);
+
+        $withoutGoogle = $this->app($this->createStub(AuthenticateTokenUseCase::class));
+        $this->expectException(HttpNotFoundException::class);
+        $withoutGoogle->handle($request);
+    }
+
     private function sessionRequest(string $token): \Psr\Http\Message\ServerRequestInterface
     {
         return (new ServerRequestFactory())
@@ -69,7 +92,7 @@ final class AuthRoutesTest extends TestCase
             ->withHeader('Authorization', 'Bearer ' . $token);
     }
 
-    private function app(AuthenticateTokenUseCase $authenticateToken): \Slim\App
+    private function app(AuthenticateTokenUseCase $authenticateToken, ?GoogleLoginAction $googleLoginAction = null): \Slim\App
     {
         $app = AppFactory::create();
         $registerRoutes = require __DIR__ . '/../../../../../../../src/Infrastructure/Adapter/In/Http/Route/AuthRoutes.php';
@@ -82,6 +105,8 @@ final class AuthRoutesTest extends TestCase
             new RequestPasswordResetAction($this->createStub(RequestPasswordResetUseCase::class)),
             new ConfirmPasswordResetAction($this->createStub(ConfirmPasswordResetUseCase::class)),
             new JwtAuthMiddleware($authenticateToken),
+            null,
+            $googleLoginAction,
         );
 
         return $app;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Infrastructure\Adapter\In\Http\Action\Auth\ChangePasswordAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\ConfirmPasswordResetAction;
+use App\Infrastructure\Adapter\In\Http\Action\Auth\GoogleLoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\LoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\MeAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\RequestPasswordResetAction;
@@ -21,12 +22,19 @@ return static function (
     RequestPasswordResetAction $requestPasswordResetAction,
     ConfirmPasswordResetAction $confirmPasswordResetAction,
     JwtAuthMiddleware $jwtAuthMiddleware,
-    ?WarmUpServicesMiddleware $warmUpMiddleware = null
+    ?WarmUpServicesMiddleware $warmUpMiddleware = null,
+    ?GoogleLoginAction $googleLoginAction = null
 ): void {
-    $login = $app->post('/api/v1/auth/login', $loginAction);
+    $loginRoutes = [$app->post('/api/v1/auth/login', $loginAction)];
+    if ($googleLoginAction !== null) {
+        // Solo existe si GOOGLE_CLIENT_ID esta configurado.
+        $loginRoutes[] = $app->post('/api/v1/auth/google', $googleLoginAction);
+    }
     if ($warmUpMiddleware !== null) {
         // Despierta a Python mientras el usuario inicia sesion.
-        $login->add($warmUpMiddleware);
+        foreach ($loginRoutes as $loginRoute) {
+            $loginRoute->add($warmUpMiddleware);
+        }
     }
     $app->post('/api/v1/auth/password-reset/request', $requestPasswordResetAction);
     $app->post('/api/v1/auth/password-reset/confirm', $confirmPasswordResetAction);

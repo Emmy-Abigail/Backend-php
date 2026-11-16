@@ -39,6 +39,36 @@ final readonly class StreamHttpTransport implements HttpTransport
         return new HttpResponse((int) $status[1], $body);
     }
 
+    public function postForm(string $url, array $fields, float $timeout): HttpResponse
+    {
+        $context = stream_context_create(['http' => [
+            'method' => 'POST',
+            'header' => "Content-Type: application/x-www-form-urlencoded\r\nAccept: application/json\r\n",
+            'content' => http_build_query($fields),
+            'timeout' => $timeout,
+            'ignore_errors' => true,
+            'follow_location' => 0,
+            'max_redirects' => 0,
+        ]]);
+
+        set_error_handler(static function (): never {
+            // Sin URL ni campos en el mensaje: el formulario lleva claves secretas.
+            throw new RuntimeException('No se pudo contactar al servicio externo');
+        });
+        try {
+            $body = file_get_contents($url, false, $context, 0, 65537);
+        } finally {
+            restore_error_handler();
+        }
+
+        if ($body === false || strlen($body) > 65536
+            || !preg_match('/^HTTP\/\S+\s+([0-9]{3})\b/', $http_response_header[0] ?? '', $status)) {
+            throw new RuntimeException('Respuesta HTTP invalida');
+        }
+
+        return new HttpResponse((int) $status[1], $body);
+    }
+
     public function get(string $url, float $timeout): HttpResponse
     {
         $context = stream_context_create(['http' => [
