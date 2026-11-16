@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Application\Service\Auth\AuthenticateTokenService;
 use App\Application\Service\Auth\ChangePasswordService;
 use App\Application\Service\Auth\ConfirmPasswordResetService;
+use App\Application\Service\Auth\GoogleLoginService;
 use App\Application\Service\Auth\LoginService;
 use App\Application\Service\Auth\RequestPasswordResetService;
 use App\Application\Service\Batch\DispatchBatchService;
@@ -32,6 +33,7 @@ use App\Application\Service\User\CreateUserService;
 use App\Application\Service\User\ListUsersService;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\ChangePasswordAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\ConfirmPasswordResetAction;
+use App\Infrastructure\Adapter\In\Http\Action\Auth\GoogleLoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\LoginAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\MeAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\RequestPasswordResetAction;
@@ -83,6 +85,8 @@ use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlPackageRetrySourceRepo
 use App\Infrastructure\Adapter\Out\Pricing\LocalPackagePricing;
 use App\Infrastructure\Adapter\Out\Route\HttpRouteOptimizerGateway;
 use App\Infrastructure\Adapter\Out\Security\FileRateLimiter;
+use App\Infrastructure\Adapter\Out\Security\GoogleIdTokenVerifier;
+use App\Infrastructure\Adapter\Out\Security\GoogleRecaptchaVerifier;
 use App\Infrastructure\Adapter\Out\Security\RandomTrackingGenerator;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlCatalogRepository;
 use App\Infrastructure\Adapter\Out\Persistence\MySQL\MySqlDistrictDirectory;
@@ -119,9 +123,39 @@ $tokenService = new JwtTokenService(
     (int) $_ENV['JWT_TTL_SECONDS'],
 );
 
+// reCAPTCHA v2 en el login con contrasena; apagado por defecto (Postman, pruebas locales).
+$recaptchaEnabled = filter_var($_ENV['RECAPTCHA_ENABLED'] ?? 'false', FILTER_VALIDATE_BOOLEAN);
+$recaptchaSecret = trim($_ENV['RECAPTCHA_SECRET_KEY'] ?? '');
+if ($recaptchaEnabled && $recaptchaSecret === '') {
+    throw new RuntimeException('RECAPTCHA_ENABLED=true requiere RECAPTCHA_SECRET_KEY');
+}
+$captchaVerifier = $recaptchaEnabled
+    ? new GoogleRecaptchaVerifier(
+        new StreamHttpTransport(),
+        $recaptchaSecret,
+        (float) ($_ENV['RECAPTCHA_TIMEOUT_SECONDS'] ?? 5),
+    )
+    : null;
+
 $loginAction = new LoginAction(
-    new LoginService($userRepository, $tokenService, $catalogRepository),
+    new LoginService($userRepository, $tokenService, $catalogRepository, $captchaVerifier),
 );
+
+// "Continuar con Google": la ruta solo se registra si GOOGLE_CLIENT_ID esta configurado.
+$googleClientId = trim($_ENV['GOOGLE_CLIENT_ID'] ?? '');
+$googleLoginAction = $googleClientId === ''
+    ? null
+    : new GoogleLoginAction(new GoogleLoginService(
+        new GoogleIdTokenVerifier(
+            new StreamHttpTransport(),
+            $googleClientId,
+            sys_get_temp_dir() . '/riva-google-certs.json',
+            (float) ($_ENV['GOOGLE_TIMEOUT_SECONDS'] ?? 5),
+        ),
+        $userRepository,
+        $tokenService,
+        $catalogRepository,
+    ));
 
 $authenticateTokenService = new AuthenticateTokenService($tokenService, $userRepository, $catalogRepository);
 $jwtAuthMiddleware = new JwtAuthMiddleware($authenticateTokenService);
@@ -182,6 +216,7 @@ $registerAuthRoutes(
     $confirmPasswordResetAction,
     $jwtAuthMiddleware,
     $warmUpMiddleware,
+    $googleLoginAction,
 );
 
 $registerUserRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php';

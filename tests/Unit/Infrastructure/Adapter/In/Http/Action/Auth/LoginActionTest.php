@@ -2,6 +2,8 @@
 
 namespace Tests\Unit\Infrastructure\Adapter\In\Http\Action\Auth;
 
+use App\Application\Exception\CaptchaUnavailable;
+use App\Application\Exception\InvalidCaptcha;
 use App\Application\Exception\InvalidCredentials;
 use App\Application\Port\In\Auth\LoginCommand;
 use App\Application\Port\In\Auth\LoginResult;
@@ -183,5 +185,74 @@ class LoginActionTest extends TestCase
         $response = $action($this->makeRequest(['correo' => ' ADMIN@EMAIL.COM ', 'password' => 'clave-correcta']), $this->makeResponse());
 
         $this->assertSame(200, $response->getStatusCode());
+    }
+
+    private function adminResult(): LoginResult
+    {
+        return new LoginResult(1, 'Admin', 'admin@email.com', 'ADMINISTRADOR', 'token-falso', 'Bearer', new DateTimeImmutable('+1 hour'));
+    }
+
+    #[Test]
+    public function test_el_recaptcha_token_llega_al_servicio()
+    {
+        $loginUseCase = $this->createMock(LoginUseCase::class);
+        $loginUseCase->expects($this->once())
+            ->method('execute')
+            ->with($this->callback(fn (LoginCommand $command) => $command->captchaToken === 'token-recaptcha'))
+            ->willReturn($this->adminResult());
+
+        $response = (new LoginAction($loginUseCase))(
+            $this->makeRequest(['correo' => 'admin@email.com', 'password' => 'clave', 'recaptcha_token' => 'token-recaptcha']),
+            $this->makeResponse(),
+        );
+
+        $this->assertSame(200, $response->getStatusCode());
+    }
+
+    #[Test]
+    public function test_un_recaptcha_token_que_no_es_texto_o_es_enorme_llega_como_null()
+    {
+        foreach ([123, ['x'], str_repeat('a', 8193)] as $token) {
+            $loginUseCase = $this->createMock(LoginUseCase::class);
+            $loginUseCase->expects($this->once())
+                ->method('execute')
+                ->with($this->callback(fn (LoginCommand $command) => $command->captchaToken === null))
+                ->willReturn($this->adminResult());
+
+            (new LoginAction($loginUseCase))(
+                $this->makeRequest(['correo' => 'admin@email.com', 'password' => 'clave', 'recaptcha_token' => $token]),
+                $this->makeResponse(),
+            );
+        }
+    }
+
+    #[Test]
+    public function test_captcha_invalido_responde_422()
+    {
+        $loginUseCase = $this->createStub(LoginUseCase::class);
+        $loginUseCase->method('execute')->willThrowException(new InvalidCaptcha());
+
+        $response = (new LoginAction($loginUseCase))(
+            $this->makeRequest(['correo' => 'admin@email.com', 'password' => 'clave']),
+            $this->makeResponse(),
+        );
+
+        $this->assertSame(422, $response->getStatusCode());
+        $this->assertSame('captcha_invalido', $this->decode($response)['error']);
+    }
+
+    #[Test]
+    public function test_si_google_no_verifica_el_captcha_responde_503()
+    {
+        $loginUseCase = $this->createStub(LoginUseCase::class);
+        $loginUseCase->method('execute')->willThrowException(new CaptchaUnavailable());
+
+        $response = (new LoginAction($loginUseCase))(
+            $this->makeRequest(['correo' => 'admin@email.com', 'password' => 'clave', 'recaptcha_token' => 'x']),
+            $this->makeResponse(),
+        );
+
+        $this->assertSame(503, $response->getStatusCode());
+        $this->assertSame('captcha_no_disponible', $this->decode($response)['error']);
     }
 }

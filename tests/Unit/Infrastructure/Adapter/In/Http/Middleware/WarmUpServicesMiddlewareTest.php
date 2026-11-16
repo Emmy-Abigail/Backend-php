@@ -93,4 +93,9 @@ final class RecordingTransport implements HttpTransport
 
         return new HttpResponse(200, '');
     }
+
+    public function postForm(string $url, array $fields, float $timeout): HttpResponse
+    {
+        throw new RuntimeException('No se usa en esta prueba');
+    }
 }

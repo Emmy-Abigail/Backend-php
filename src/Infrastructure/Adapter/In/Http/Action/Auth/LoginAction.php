@@ -4,15 +4,18 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Adapter\In\Http\Action\Auth;
 
+use App\Application\Exception\CaptchaUnavailable;
+use App\Application\Exception\InvalidCaptcha;
 use App\Application\Exception\InvalidCredentials;
 use App\Application\Port\In\Auth\LoginCommand;
 use App\Application\Port\In\Auth\LoginUseCase;
-use DateTimeZone;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
 final readonly class LoginAction
 {
+    private const MAX_CAPTCHA_TOKEN_LENGTH = 8192;
+
     public function __construct(private LoginUseCase $loginUseCase)
     {
     }
@@ -22,7 +25,7 @@ final readonly class LoginAction
         $body = $request->getParsedBody();
 
         if (!is_array($body)) {
-            return $this->json($response, [
+            return LoginResponse::json($response, [
                 'message' => 'El cuerpo debe ser un objeto JSON válido',
                 'error' => 'cuerpo_invalido',
             ], 400);
@@ -45,66 +48,36 @@ final readonly class LoginAction
             return $this->invalidCredentialsResponse($response);
         }
 
+        // Opcional en el cuerpo; el servicio lo exige solo si RECAPTCHA_ENABLED=true.
+        $captchaToken = $body['recaptcha_token'] ?? null;
+        if (!is_string($captchaToken) || strlen($captchaToken) > self::MAX_CAPTCHA_TOKEN_LENGTH) {
+            $captchaToken = null;
+        }
+
         try {
-            $result = $this->loginUseCase->execute(new LoginCommand($email, $password));
+            $result = $this->loginUseCase->execute(new LoginCommand($email, $password, $captchaToken));
+        } catch (InvalidCaptcha) {
+            return LoginResponse::json($response, [
+                'message' => 'La verificación reCAPTCHA no es válida. Vuelve a marcar la casilla.',
+                'error' => 'captcha_invalido',
+            ], 422);
+        } catch (CaptchaUnavailable) {
+            return LoginResponse::json($response, [
+                'message' => 'No se pudo verificar el reCAPTCHA. Intenta de nuevo en unos segundos.',
+                'error' => 'captcha_no_disponible',
+            ], 503);
         } catch (InvalidCredentials) {
             return $this->invalidCredentialsResponse($response);
         }
 
-        $sede = null;
-        if ($result->role === 'OPERADOR' && $result->idSede !== null) {
-            $sede = [
-                'id' => $result->idSede,
-                'nombre' => $result->sedeNombre ?? 'Sede Asignada',
-            ];
-        }
-
-        $vehiculo = null;
-        if ($result->role === 'CONDUCTOR' && $result->idTipoVehiculo !== null) {
-            $vehiculo = [
-                'id' => $result->idTipoVehiculo,
-                'nombre' => $result->tipoVehiculoNombre ?? 'Vehículo Asignado',
-                'peso_max_total_kg' => $result->pesoMaxTotalKg,
-                'lado_max_cm' => $result->ladoMaxCm,
-            ];
-        }
-
-        $expiresAtLima = $result->expiresAt->setTimezone(new DateTimeZone('America/Lima'));
-
-        return $this->json($response, [
-            'token' => $result->token,
-            'token_type' => $result->tokenType,
-            'expires_at' => $expiresAtLima->format('Y-m-d\TH:i:sP'),
-            'user' => [
-                'id' => $result->id,
-                'nombres' => $result->names,
-                'correo' => $result->email,
-                'rol' => $result->role,
-                'debe_cambiar_password' => $result->mustChangePassword,
-                'sede' => $sede,
-                'vehiculo' => $vehiculo,
-                'placa' => $result->placa,
-            ],
-        ]);
+        return LoginResponse::json($response, LoginResponse::body($result));
     }
 
     private function invalidCredentialsResponse(ResponseInterface $response): ResponseInterface
     {
-        return $this->json($response, [
+        return LoginResponse::json($response, [
             'message' => 'Credenciales incorrectas',
             'error' => 'credenciales_incorrectas',
         ], 401);
-    }
-
-    /**
-     * @param array<string, mixed> $payload
-     */
-    private function json(ResponseInterface $response, array $payload, int $status = 200): ResponseInterface
-    {
-        $response->getBody()->write(json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
-
-        return $response
-            ->withHeader('Content-Type', 'application/json')
-            ->withStatus($status);
     }
 }
