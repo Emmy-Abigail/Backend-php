@@ -51,6 +51,38 @@ final class GoogleRecaptchaVerifierTest extends TestCase
         self::assertFalse((new GoogleRecaptchaVerifier($transport, 'clave-secreta'))->verify('token'));
     }
 
+    private function verifyWithHostname(string $body, ?string $expectedHostname): bool
+    {
+        $transport = $this->createStub(HttpTransport::class);
+        $transport->method('postForm')->willReturn(new HttpResponse(200, $body));
+
+        return (new GoogleRecaptchaVerifier($transport, 'clave-secreta', expectedHostname: $expectedHostname))->verify('token');
+    }
+
+    #[Test]
+    public function acepta_el_token_si_el_dominio_coincide_sin_importar_mayusculas(): void
+    {
+        self::assertTrue($this->verifyWithHostname('{"success": true, "hostname": "Riva-Envios.vercel.app"}', 'riva-envios.vercel.app'));
+    }
+
+    #[Test]
+    public function rechaza_un_token_valido_resuelto_en_otro_dominio(): void
+    {
+        self::assertFalse($this->verifyWithHostname('{"success": true, "hostname": "sitio-ajeno.com"}', 'riva-envios.vercel.app'));
+    }
+
+    #[Test]
+    public function rechaza_si_se_espera_un_dominio_y_google_no_lo_informa(): void
+    {
+        self::assertFalse($this->verifyWithHostname('{"success": true}', 'riva-envios.vercel.app'));
+    }
+
+    #[Test]
+    public function sin_dominio_configurado_no_se_valida_el_dominio(): void
+    {
+        self::assertTrue($this->verifyWithHostname('{"success": true, "hostname": "localhost"}', null));
+    }
+
     /** @return array<string, array{HttpResponse|null}> */
     public static function unavailableResponses(): array
     {

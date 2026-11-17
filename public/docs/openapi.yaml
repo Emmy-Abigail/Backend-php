@@ -59,6 +59,9 @@ paths:
         reCAPTCHA v2: si el servidor tiene RECAPTCHA_ENABLED=true, el campo recaptcha_token es
         obligatorio y se valida con Google antes de revisar la contraseña. Con RECAPTCHA_ENABLED=false
         (valor por defecto, pruebas locales y Postman) el campo se ignora.
+
+        Limite de intentos: 10 por minuto por correo e IP (`LOGIN_RATE_LIMIT_PER_MINUTE`). Al pasarlo responde 429
+        (`demasiadas_consultas`) con el encabezado `Retry-After`. Se aplica antes de verificar el reCAPTCHA.
       requestBody:
         required: true
         content:
@@ -85,6 +88,20 @@ paths:
               example:
                 message: La verificación reCAPTCHA no es válida. Vuelve a marcar la casilla.
                 error: captcha_invalido
+        '429':
+          description: Demasiados intentos con el mismo correo desde la misma IP (`demasiadas_consultas`).
+          headers:
+            Retry-After:
+              description: Segundos que faltan para poder intentar de nuevo
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: demasiadas_consultas
+                message: Demasiadas consultas. Intenta de nuevo en 30 segundos
         '503':
           description: Google no respondió al verificar el reCAPTCHA (`captcha_no_disponible`).
           content:
