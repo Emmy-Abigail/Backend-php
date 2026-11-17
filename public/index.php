@@ -49,10 +49,12 @@ use App\Infrastructure\Adapter\In\Http\Action\Delivery\GetEvidenceAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetCatalogsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetFailureReasonsAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetGeographyAction;
+use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetPublicSedesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetSedesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Catalog\GetVehicleTypesAction;
 use App\Infrastructure\Adapter\In\Http\Action\Geocoding\ReverseGeocodeAction;
 use App\Infrastructure\Adapter\In\Http\Action\Geocoding\SuggestAddressesAction;
+use App\Infrastructure\Adapter\In\Http\Action\Pricing\PublicQuoteAction;
 use App\Infrastructure\Adapter\In\Http\Action\Pricing\QuoteAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\GetPackageAction;
 use App\Infrastructure\Adapter\In\Http\Action\Package\ListPackagesAction;
@@ -376,6 +378,25 @@ $registerTrackingRoutes(
             (int) ($_ENV['TRACKING_RATE_LIMIT_PER_MINUTE'] ?? 30),
         ),
         'tracking',
+    ),
+);
+
+// Cotizacion publica (cliente sin sesion): la sede de origen llega en el cuerpo y hay limite por IP.
+$registerPublicQuoteRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/PublicQuoteRoutes.php';
+$registerPublicQuoteRoutes(
+    $app,
+    new PublicQuoteAction(
+        new QuoteShipmentService($catalogRepository, $tariffRepository),
+        new GetSedesService($catalogRepository),
+    ),
+    new GetPublicSedesAction(new GetSedesService($catalogRepository)),
+    $getGeographyAction,
+    new RateLimitMiddleware(
+        new FileRateLimiter(
+            $_ENV['RATE_LIMIT_STORAGE_PATH'] ?? sys_get_temp_dir() . '/riva-rate-limit',
+            (int) ($_ENV['PUBLIC_RATE_LIMIT_PER_MINUTE'] ?? 60),
+        ),
+        'public',
     ),
 );
 

@@ -696,6 +696,154 @@ paths:
                 message: No hay una tarifa base vigente
                 error: tarifa_no_configurada
 
+  /api/v1/public/quotes:
+    post:
+      tags: [Cotizaciones]
+      summary: Cotizar un envio sin iniciar sesion (cliente)
+      description: |
+        Publico: no requiere token ni rol. Es la cotizacion de la pantalla /cotizar para el cliente.
+        Usa exactamente la misma formula, validaciones y respuesta que `POST /api/v1/quotes`.
+        La diferencia es el origen: como no hay sesion, el cliente elige la sede donde dejara su paquete
+        y la envia en `id_sede` (debe existir y estar activa; ver `GET /api/v1/public/sedes`).
+        Tiene limite de consultas por IP y por minuto (`PUBLIC_RATE_LIMIT_PER_MINUTE`, 60 por defecto),
+        compartido con `GET /api/v1/public/sedes` y `GET /api/v1/public/geography`.
+        No guarda nada. `POST /api/v1/quotes` sigue protegido (JWT, rol OPERADOR).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicQuoteRequest'
+            example:
+              id_sede: 1
+              ubigeo_destino: "150140"
+              peso_kg: 25
+              largo_cm: 12
+              ancho_cm: 30
+              alto_cm: 20
+      responses:
+        '200':
+          description: Cotizacion calculada (misma respuesta que POST /api/v1/quotes)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          description: |
+            Datos invalidos. Codigos de `error`: `campo_obligatorio` (falta id_sede o una medida),
+            `campo_invalido` (formato o limites) y `referencia_invalida` (sede inexistente o inactiva, o distrito inexistente).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: La sede de origen no existe o no esta activa
+                error: referencia_invalida
+        '429':
+          description: Demasiadas consultas desde la misma IP
+          headers:
+            Retry-After:
+              description: Segundos que faltan para poder consultar de nuevo
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: demasiadas_consultas
+                message: Demasiadas consultas. Intenta de nuevo en 30 segundos
+        '503':
+          description: No hay una tarifa base vigente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                message: No hay una tarifa base vigente
+                error: tarifa_no_configurada
+
+  /api/v1/public/sedes:
+    get:
+      tags: [Cotizaciones]
+      summary: Listar las sedes activas (sin iniciar sesion)
+      description: |
+        Publico, para llenar el combo "Sede donde dejaras tu paquete" de la cotizacion.
+        Mismo formato que `GET /api/v1/sedes` pero solo con las sedes activas.
+        Mismo limite de consultas por IP que `POST /api/v1/public/quotes`.
+      security: []
+      responses:
+        '200':
+          description: Sedes activas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        nombre:
+                          type: string
+                        direccion:
+                          type: string
+                        distrito:
+                          type: string
+                        ubigeo_distrito:
+                          type: string
+                        zona:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            codigo:
+                              type: string
+                            nombre:
+                              type: string
+                        activa:
+                          type: boolean
+        '429':
+          description: Demasiadas consultas desde la misma IP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/public/geography:
+    get:
+      tags: [Cotizaciones]
+      summary: Obtener departamentos, provincias y distritos (sin iniciar sesion)
+      description: |
+        Publico, para llenar los combos del distrito de destino de la cotizacion.
+        Mismo contenido que `GET /api/v1/geography`. Se envia el `ubigeo` del distrito elegido en `ubigeo_destino`.
+        Mismo limite de consultas por IP que `POST /api/v1/public/quotes`.
+      security: []
+      responses:
+        '200':
+          description: Estructura geografica
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+        '429':
+          description: Demasiadas consultas desde la misma IP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/geocode/suggest:
     get:
       tags: [Direcciones]
@@ -3018,6 +3166,19 @@ components:
           minimum: 10
           maximum: 150
           example: 20
+
+    PublicQuoteRequest:
+      description: Igual que QuoteRequest mas la sede de origen, porque el cliente no tiene sesion.
+      allOf:
+        - $ref: '#/components/schemas/QuoteRequest'
+        - type: object
+          required: [id_sede]
+          properties:
+            id_sede:
+              type: integer
+              minimum: 1
+              description: Sede donde el cliente dejara su paquete (debe existir y estar activa). Tambien se acepta como texto numerico.
+              example: 1
 
     QuoteResponse:
       type: object
