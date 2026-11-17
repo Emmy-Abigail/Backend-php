@@ -10,6 +10,7 @@ use App\Infrastructure\Adapter\In\Http\Action\Auth\MeAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\RequestPasswordResetAction;
 use App\Infrastructure\Adapter\In\Http\Action\Auth\SessionStatusAction;
 use App\Infrastructure\Adapter\In\Http\Middleware\JwtAuthMiddleware;
+use App\Infrastructure\Adapter\In\Http\Middleware\RateLimitMiddleware;
 use App\Infrastructure\Adapter\In\Http\Middleware\WarmUpServicesMiddleware;
 use Slim\App;
 
@@ -23,18 +24,25 @@ return static function (
     ConfirmPasswordResetAction $confirmPasswordResetAction,
     JwtAuthMiddleware $jwtAuthMiddleware,
     ?WarmUpServicesMiddleware $warmUpMiddleware = null,
-    ?GoogleLoginAction $googleLoginAction = null
+    ?GoogleLoginAction $googleLoginAction = null,
+    ?RateLimitMiddleware $loginRateLimitMiddleware = null
 ): void {
-    $loginRoutes = [$app->post('/api/v1/auth/login', $loginAction)];
+    $loginRoute = $app->post('/api/v1/auth/login', $loginAction);
+    $loginRoutes = [$loginRoute];
     if ($googleLoginAction !== null) {
         // Solo existe si GOOGLE_CLIENT_ID esta configurado.
         $loginRoutes[] = $app->post('/api/v1/auth/google', $googleLoginAction);
     }
     if ($warmUpMiddleware !== null) {
         // Despierta a Python mientras el usuario inicia sesion.
-        foreach ($loginRoutes as $loginRoute) {
-            $loginRoute->add($warmUpMiddleware);
+        foreach ($loginRoutes as $route) {
+            $route->add($warmUpMiddleware);
         }
+    }
+    if ($loginRateLimitMiddleware !== null) {
+        // Se agrega al final para que sea el primero en ejecutarse: un abuso se corta antes de despertar a Python.
+        // Solo aplica al login con contrasena; /auth/google no tiene nada que adivinar.
+        $loginRoute->add($loginRateLimitMiddleware);
     }
     $app->post('/api/v1/auth/password-reset/request', $requestPasswordResetAction);
     $app->post('/api/v1/auth/password-reset/confirm', $confirmPasswordResetAction);

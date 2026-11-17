@@ -131,11 +131,14 @@ $recaptchaSecret = trim($_ENV['RECAPTCHA_SECRET_KEY'] ?? '');
 if ($recaptchaEnabled && $recaptchaSecret === '') {
     throw new RuntimeException('RECAPTCHA_ENABLED=true requiere RECAPTCHA_SECRET_KEY');
 }
+// Dominio que debe informar Google (p. ej. riva-envios.vercel.app); vacio = no se valida (local).
+$recaptchaHostname = trim($_ENV['RECAPTCHA_EXPECTED_HOSTNAME'] ?? '');
 $captchaVerifier = $recaptchaEnabled
     ? new GoogleRecaptchaVerifier(
         new StreamHttpTransport(),
         $recaptchaSecret,
         (float) ($_ENV['RECAPTCHA_TIMEOUT_SECONDS'] ?? 5),
+        expectedHostname: $recaptchaHostname === '' ? null : $recaptchaHostname,
     )
     : null;
 
@@ -207,6 +210,17 @@ $warmUpMiddleware = new WarmUpServicesMiddleware(
     (float) ($_ENV['SERVICE_WARMUP_TIMEOUT_SECONDS'] ?? 1),
 );
 
+// Limite de intentos del login con contrasena: por correo e IP, para que en un servidor detras de un proxy
+// (Render) los intentos de una persona no bloqueen a las demas.
+$loginRateLimitMiddleware = RateLimitMiddleware::perBodyField(
+    new FileRateLimiter(
+        $_ENV['RATE_LIMIT_STORAGE_PATH'] ?? sys_get_temp_dir() . '/riva-rate-limit',
+        (int) ($_ENV['LOGIN_RATE_LIMIT_PER_MINUTE'] ?? 10),
+    ),
+    'login',
+    'correo',
+);
+
 $registerAuthRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/AuthRoutes.php';
 $registerAuthRoutes(
     $app,
@@ -219,6 +233,7 @@ $registerAuthRoutes(
     $jwtAuthMiddleware,
     $warmUpMiddleware,
     $googleLoginAction,
+    $loginRateLimitMiddleware,
 );
 
 $registerUserRoutes = require __DIR__ . '/../src/Infrastructure/Adapter/In/Http/Route/UserRoutes.php';

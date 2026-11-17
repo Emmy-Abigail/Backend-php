@@ -20,6 +20,7 @@ final readonly class GoogleRecaptchaVerifier implements CaptchaVerifier
         private string $secretKey,
         private float $timeout = 5.0,
         private string $url = self::SITEVERIFY_URL,
+        private ?string $expectedHostname = null,
     ) {
     }
 
@@ -46,6 +47,17 @@ final readonly class GoogleRecaptchaVerifier implements CaptchaVerifier
             throw new CaptchaUnavailable('No se pudo verificar el captcha');
         }
 
-        return is_array($data) && ($data['success'] ?? false) === true;
+        if (!is_array($data) || ($data['success'] ?? false) !== true) {
+            return false;
+        }
+
+        if ($this->expectedHostname === null) {
+            return true;
+        }
+
+        // Un token resuelto en otro dominio no sirve aunque Google lo haya dado por bueno.
+        $hostname = $data['hostname'] ?? null;
+
+        return is_string($hostname) && strcasecmp($hostname, $this->expectedHostname) === 0;
     }
 }
