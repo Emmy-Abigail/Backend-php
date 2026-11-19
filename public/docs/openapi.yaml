@@ -1148,7 +1148,8 @@ paths:
         Incluye vehiculo (id, codigo y nombre) tomado del lote, incluso antes de asignar conductor.
         Si un paquete no tiene lote, vehiculo es null. Las fechas usan ISO 8601 con offset -05:00.
         requiere_corregir_direccion indica si Reasignar debe abrir el formulario de direccion:
-        solo es true para FALLIDO cuyo ultimo evento es FALLIDO por DIRECCION_ERRONEA.
+        solo es true para FALLIDO cuyo ultimo evento es FALLIDO por DIRECCION_ERRONEA y que aun se puede reasignar
+        (es false si el paquete ya tiene su reintento o el envio llego al maximo de 3).
         El operador debe enviar una direccion corregida en POST /packages/{id}/retry.
         Para el conductor siempre es false. No habilita editar el paquete original.
       security:
@@ -1169,7 +1170,7 @@ paths:
                     type: string
                   requiere_corregir_direccion:
                     type: boolean
-                    description: Indica que Reasignar exige corregir la direccion antes de crear el reintento.
+                    description: Indica que Reasignar exige corregir la direccion antes de crear el reintento. Es false si el paquete ya fue reasignado o llego al maximo de reintentos.
                   reintentos_restantes:
                     type: integer
                     nullable: true
