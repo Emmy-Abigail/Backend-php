@@ -52,7 +52,8 @@ final readonly class MySqlPackageRetrySourceRepository implements PackageRetrySo
             return null;
         }
 
-        $alreadyRetried = $this->connection->table('paquetes')->where('id_paquete_origen', $packageId)->exists();
+        $existingRetry = $this->connection->table('paquetes')->where('id_paquete_origen', $packageId)->first(['tracking_id']);
+        $alreadyRetried = $existingRetry !== null;
         $last = $this->connection->table('historial_estados as h')
             ->join('estados_paquete as e', 'e.id', '=', 'h.estado_nuevo_id')
             ->leftJoin('motivos_fallo as m', 'm.id', '=', 'h.id_motivo_fallo')
@@ -98,6 +99,7 @@ final readonly class MySqlPackageRetrySourceRepository implements PackageRetrySo
             ],
             $last?->estado,
             $last?->motivo,
+            $existingRetry === null ? null : (string) $existingRetry->tracking_id,
         );
     }
 
