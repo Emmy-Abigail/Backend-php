@@ -56,8 +56,7 @@ final readonly class GetPackageService implements GetPackageUseCase
                     $last['estado_nuevo'] ?? null,
                     $last['motivo_fallo']['codigo'] ?? null,
                 ),
-                'reintentos_restantes' => $this->remainingRetries($query->packageId),
-            ]);
+            ] + $this->retryInfo($query->packageId));
         }
 
         if ($detail->driverId !== $viewer->id || !in_array($detail->batchStatus, self::DRIVER_BATCH_STATUSES, true)) {
@@ -73,15 +72,22 @@ final readonly class GetPackageService implements GetPackageUseCase
 
     /**
      * DEMO 4: MAX_RETRIES - reintentos previos del envío; 0 si fue RECHAZADO o si el paquete ya tiene su reintento.
-     * Así el front deshabilita "Reasignar" sin esperar el 409.
+     * Así el front deshabilita "Reasignar" sin esperar el 409. Además indica si ya fue reasignado y con qué código.
+     *
+     * @return array{reintentos_restantes: ?int, ya_reasignado: bool, reintento_tracking_id: ?string}
      */
-    private function remainingRetries(int $packageId): ?int
+    private function retryInfo(int $packageId): array
     {
         $source = $this->retrySources?->findRetrySource($packageId);
         if ($source === null) {
-            return null;
+            return ['reintentos_restantes' => null, 'ya_reasignado' => false, 'reintento_tracking_id' => null];
         }
 
-        return RetryPolicy::remaining($source->lastStatus, $source->failureReason, $source->previousRetries, $source->alreadyRetried);
+        return [
+            'reintentos_restantes' => RetryPolicy::remaining($source->lastStatus, $source->failureReason, $source->previousRetries, $source->alreadyRetried),
+            // Distingue «este paquete ya tiene su reintento» de «el envío llegó al máximo»: ambos dan 0 reintentos restantes.
+            'ya_reasignado' => $source->alreadyRetried,
+            'reintento_tracking_id' => $source->retryTracking,
+        ];
     }
 }

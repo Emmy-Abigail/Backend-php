@@ -83,11 +83,40 @@ final class GetPackageServiceTest extends TestCase
         ];
     }
 
+    #[DataProvider('reasignaciones')]
+    public function test_el_operador_distingue_reasignado_de_maximo_alcanzado(PackageRetrySource $source, bool $yaReasignado, ?string $tracking, int $restantes): void
+    {
+        $repository = $this->createStub(PackageQueryRepository::class);
+        $repository->method('findDetail')->willReturn($this->detail());
+        $sources = $this->createStub(PackageRetrySourceRepository::class);
+        $sources->method('findRetrySource')->willReturn($source);
+
+        $result = (new GetPackageService($repository, $sources))->execute(new GetPackageQuery($this->operator(), 10))->toArray();
+
+        self::assertSame($restantes, $result['reintentos_restantes']);
+        self::assertSame($yaReasignado, $result['ya_reasignado']);
+        self::assertSame($tracking, $result['reintento_tracking_id']);
+    }
+
+    public static function reasignaciones(): array
+    {
+        return [
+            // A1 falló y se reasignó como B2: 0 restantes, pero NO por llegar al máximo.
+            'ya reasignado una vez' => [new PackageRetrySource(1, 'FALLIDO', true, 0, [], 'FALLIDO', 'CLIENTE_AUSENTE', 'K7M2PQ9XWD'), true, 'K7M2PQ9XWD', 0],
+            'fallido sin reasignar' => [new PackageRetrySource(1, 'FALLIDO', false, 0, [], 'FALLIDO', 'CLIENTE_AUSENTE'), false, null, 3],
+            // Tercer reintento fallido: llegó al máximo y no tiene reintento propio.
+            'maximo alcanzado' => [new PackageRetrySource(1, 'FALLIDO', false, 3, [], 'FALLIDO', 'OTRO'), false, null, 0],
+            'rechazado' => [new PackageRetrySource(1, 'FALLIDO', false, 0, [], 'FALLIDO', 'RECHAZADO'), false, null, 0],
+        ];
+    }
+
     public function test_el_conductor_no_recibe_reintentos_restantes(): void
     {
         $result = $this->service($this->detail())->execute(new GetPackageQuery($this->driver(), 10))->toArray();
 
         self::assertArrayNotHasKey('reintentos_restantes', $result);
+        self::assertArrayNotHasKey('ya_reasignado', $result);
+        self::assertArrayNotHasKey('reintento_tracking_id', $result);
     }
 
     public function test_el_administrador_ve_el_detalle_completo_de_cualquier_sede(): void

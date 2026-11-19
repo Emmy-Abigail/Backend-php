@@ -1180,6 +1180,16 @@ paths:
                       0 si el destinatario lo RECHAZO o si el paquete ya tiene su reintento.
                       Sirve para deshabilitar Reasignar sin esperar el 409.
                     example: 2
+                  ya_reasignado:
+                    type: boolean
+                    description: >
+                      Solo para el operador. true si este paquete ya tiene su reintento (se creo otro paquete desde el).
+                      Distingue ese caso del de llegar al maximo de 3 reintentos, que tambien da reintentos_restantes = 0.
+                  reintento_tracking_id:
+                    type: string
+                    nullable: true
+                    description: Solo para el operador. Codigo de seguimiento del reintento ya creado; null si todavia no tiene.
+                    example: K7M2PQ9XWD
                   fecha_estimada_entrega:
                     type: string
                     format: date-time

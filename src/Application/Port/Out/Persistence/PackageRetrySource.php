@@ -19,6 +19,8 @@ final readonly class PackageRetrySource
         public array $registrationInput,
         public ?string $lastStatus = null,
         public ?string $failureReason = null,
+        /** Código de seguimiento del reintento ya creado desde este paquete; null si todavía no tiene. */
+        public ?string $retryTracking = null,
     ) {
     }
 }
