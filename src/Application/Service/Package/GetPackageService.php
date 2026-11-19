@@ -49,14 +49,18 @@ final readonly class GetPackageService implements GetPackageUseCase
 
             $last = $detail->history === [] ? [] : $detail->history[array_key_last($detail->history)];
 
+            $retry = $this->retryInfo($query->packageId);
+            // Si ya no se puede reasignar (ya tiene su reintento o llegó al máximo), no se ofrece corregir la dirección.
+            $canStillRetry = $retry['reintentos_restantes'] === null || $retry['reintentos_restantes'] > 0;
+
             return new GetPackageResult($detail->data + [
                 'historial' => $detail->history,
-                'requiere_corregir_direccion' => AddressCorrectionPolicy::requiresForRetry(
+                'requiere_corregir_direccion' => $canStillRetry && AddressCorrectionPolicy::requiresForRetry(
                     $detail->data['estado']['codigo'] ?? null,
                     $last['estado_nuevo'] ?? null,
                     $last['motivo_fallo']['codigo'] ?? null,
                 ),
-            ] + $this->retryInfo($query->packageId));
+            ] + $retry);
         }
 
         if ($detail->driverId !== $viewer->id || !in_array($detail->batchStatus, self::DRIVER_BATCH_STATUSES, true)) {
