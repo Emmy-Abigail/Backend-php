@@ -29,18 +29,19 @@ final class DashboardRulesTest extends TestCase
         self::assertNull(DashboardMath::averageHours([]));
     }
 
-    public function test_la_sede_mas_baja_es_la_de_menor_porcentaje_con_al_menos_30_terminados(): void
+    public function test_la_sede_mas_baja_es_la_de_menor_porcentaje_con_al_menos_10_terminados(): void
     {
         $lowest = LowestSedeRule::lowest([
             ['id' => 1, 'finished' => 400, 'delivered' => 380, 'failed' => 20],
             ['id' => 4, 'finished' => 214, 'delivered' => 194, 'failed' => 20],
             // Peor porcentaje, pero con pocos datos: no compite.
-            ['id' => 5, 'finished' => 29, 'delivered' => 10, 'failed' => 19],
+            ['id' => 5, 'finished' => 9, 'delivered' => 2, 'failed' => 7],
         ]);
 
         self::assertSame(4, $lowest);
-        self::assertFalse(LowestSedeRule::hasEnoughData(29));
-        self::assertTrue(LowestSedeRule::hasEnoughData(30));
+        self::assertSame(10, LowestSedeRule::MIN_FINISHED);
+        self::assertFalse(LowestSedeRule::hasEnoughData(9));
+        self::assertTrue(LowestSedeRule::hasEnoughData(10));
     }
 
     public function test_en_empate_queda_mas_baja_la_que_tiene_mas_fallidos(): void

@@ -2478,6 +2478,10 @@ components:
                 type: string
               paquetes_registrados:
                 type: integer
+              entregas_exitosas_qty:
+                type: integer
+                description: Paquetes ENTREGADOS por la sede en el periodo (se envia aunque haya datos insuficientes).
+                example: 30
               entregas_exitosas_pct:
                 $ref: '#/components/schemas/DashboardRate'
               finalizados_qty:
@@ -2488,10 +2492,10 @@ components:
                 $ref: '#/components/schemas/DashboardRate'
               es_mas_baja:
                 type: boolean
-                description: Menor porcentaje de entregas exitosas entre las sedes con al menos 30 terminados; con empate, la de mas fallidos.
+                description: Menor porcentaje de entregas exitosas entre las sedes con al menos 10 terminados; con empate, la de mas fallidos.
               datos_insuficientes:
                 type: boolean
-                description: Menos de 30 paquetes terminados en el periodo.
+                description: Menos de 10 paquetes terminados (entregados + fallidos) en el periodo. El porcentaje y las cantidades se envian igual.
         fallidos_motivo:
           type: object
           properties:

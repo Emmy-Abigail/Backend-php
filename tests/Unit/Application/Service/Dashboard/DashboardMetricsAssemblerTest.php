@@ -86,7 +86,10 @@ final class DashboardMetricsAssemblerTest extends TestCase
 
         self::assertSame([1, 2], array_column($ranking, 'id_sede'), 'La sede inactiva sin movimiento no aparece');
         self::assertSame(35, $ranking[0]['paquetes_registrados']);
+        self::assertSame(30, $ranking[0]['entregas_exitosas_qty'], 'Sede 1: 30 entregadas de 33 terminadas');
         self::assertSame(90.9, $ranking[0]['entregas_exitosas_pct']);
+        self::assertSame(33, $ranking[0]['finalizados_qty']);
+        self::assertSame(5, $ranking[1]['entregas_exitosas_qty'], 'Sede 2: 5 entregadas, menos de 10 terminadas');
         self::assertSame(3, $ranking[0]['fallidos_qty']);
         self::assertSame(10.0, $ranking[0]['tiempo_promedio_horas']);
         self::assertTrue($ranking[0]['es_mas_baja']);

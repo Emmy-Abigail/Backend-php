@@ -173,6 +173,7 @@ final class DashboardMetricsAssembler
                 'id_sede' => $row['sede']->id,
                 'nombre_sede' => $row['sede']->nombre,
                 'paquetes_registrados' => $row['registered'],
+                'entregas_exitosas_qty' => $deliveredCount,
                 'entregas_exitosas_pct' => DashboardMath::percent($deliveredCount, $finished),
                 'finalizados_qty' => $finished,
                 'fallidos_qty' => $row['failed'],
